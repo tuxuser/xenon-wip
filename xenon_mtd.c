@@ -29,6 +29,7 @@
 
 /*
  * https://www.kernel.org/doc/htmldocs/mtdnand/
+ * http://www.informit.com/articles/article.aspx?p=1187102&seqNum=1
  */
 
 

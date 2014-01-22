@@ -9,8 +9,8 @@
 #define SFCX_DATA				0x10
 #define SFCX_LOGICAL 			0x14
 #define SFCX_PHYSICAL			0x18
-#define SFCX_DPHYSADDR			0x1C
-#define SFCX_MPHYSADDR			0x20
+#define SFCX_DATAPHYADDR		0x1C
+#define SFCX_SPAREPHYADDR		0x20
 #define SFCX_PHISON				0xFC
 
 //Commands for Command Register
@@ -55,6 +55,20 @@
 //Page bitmasks
 #define PAGE_VALID          	0x4000000u
 #define PAGE_PID            	0x3FFFE00u
+
+#define MAX_PAGE_SZ 			0x210			//Max known hardware physical page size
+#define MAX_BLOCK_SZ 			0x42000 		//Max known hardware physical block size
+
+#define META_TYPE_SM				0x00 			//Pre Jasper - Small Block
+#define META_TYPE_BOS				0x01 			//Jasper 16MB - Big Block on Small NAND
+#define META_TYPE_BG				0x02			//Jasper 256MB and 512MB Big Block
+#define META_TYPE_NONE				0x0				//eMMC doesn't have Spare Data
+
+#define CONFIG_BLOCKS			0x04			//Number of blocks assigned for config data
+
+#define SFCX_INITIALIZED		1
+
+#define INVALID					-1
 
 // status ok or status ecc corrected
 //#define SFCX_SUCCESS(status) (((int) status == STATUS_PIN_BY_N) || ((int) status & STATUS_ECC_ER))

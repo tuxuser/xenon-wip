@@ -19,9 +19,34 @@
 
 /*
  * https://www.kernel.org/doc/htmldocs/mtdnand/
+ * http://www.informit.com/articles/article.aspx?p=1187102&seqNum=1
  */
 
 static int metatype = INVALID;
+
+void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
+	unsigned int i=0, val=0;
+	unsigned int v=0;
+
+	for (i = 0; i < 0x1066; i++)
+	{
+		if (!(i & 31))
+			v = ~__builtin_bswap32(*data++);
+		val ^= v & 1;
+		v>>=1;
+		if (val & 1)
+			val ^= 0x6954559;
+		val >>= 1;
+	}
+
+	val = ~val;
+
+	// 26 bit ecc data
+	edc[0] = ((val << 6) | (data[0x20C] & 0x3F)) & 0xFF;
+	edc[1] = (val >> 2) & 0xFF;
+	edc[2] = (val >> 10) & 0xFF;
+	edc[3] = (val >> 18) & 0xFF;
+}
 
 int xenon_nandfs_get_lba(METADATA *meta)
 {
