@@ -76,7 +76,7 @@
 #define META_TYPE_SM				0x00 			//Pre Jasper - Small Block
 #define META_TYPE_BOS				0x01 			//Jasper 16MB - Big Block on Small NAND
 #define META_TYPE_BG				0x02			//Jasper 256MB and 512MB Big Block
-#define META_TYPE_NONE				0x0				//eMMC doesn't have Spare Data
+#define META_TYPE_NONE				0x04				//eMMC doesn't have Spare Data
 
 #define CONFIG_BLOCKS			0x04			//Number of blocks assigned for config data
 
@@ -88,6 +88,33 @@
 //#define SFCX_SUCCESS(status) (((int) status == STATUS_PIN_BY_N) || ((int) status & STATUS_ECC_ER))
 // define success as no ecc error and no bad block error
 #define SFCX_SUCCESS(status) ((status&STATUS_ERROR)==0)
+
+typedef struct _xenon_nand
+{
+	int is_bb_cont;
+	int is_bb;
+	int mmc;
+	int meta_type;
+
+	int page_sz;
+	int page_sz_phys;
+	int meta_sz;
+
+	int pages_in_block;
+	int block_sz;
+	int block_sz_phys;
+
+	int pages_count;
+	int blocks_count;
+
+	int size_spare;
+	int size_data;
+	int size_dump;
+	int size_write;
+
+	int size_usable_fs;
+	int config_block;
+} xenon_nand, *pxenon_nand;
 
 unsigned long xenon_sfc_readreg(int addr);
 void xenon_sfc_writereg(int addr, unsigned long data);
@@ -102,6 +129,8 @@ int xenon_sfc_readfullflash(unsigned char* buf);
 int xenon_sfc_writefullflash(unsigned char* buf);
 int xenon_sfc_eraseblock(int block);
 int xenon_sfc_eraseblocks(int block, int block_cnt);
+
+xenon_nand xenon_sfc_getnandstruct(void);
 
 
 #endif

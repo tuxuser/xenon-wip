@@ -36,34 +36,7 @@
 
 #define DEBUG_OUT 1
 
-struct xenon_nand
-{
-	int is_bb_cont;
-	int is_bb;
-	int mmc;
-	int meta_type;
-
-	int page_sz;
-	int page_sz_phys;
-	int meta_sz;
-
-	int pages_in_block;
-	int block_sz;
-	int block_sz_phys;
-
-	int pages_count;
-	int blocks_count;
-
-	int size_spare;
-	int size_data;
-	int size_dump;
-	int size_write;
-
-	int size_usable_fs;
-	int config_block;
-};
-
-struct xenon_sfc
+typedef struct _xenon_sfc
 {
 	void __iomem *base;
 	wait_queue_head_t wait_q;
@@ -71,10 +44,10 @@ struct xenon_sfc
 	
 	dma_addr_t dmaaddr;
 	unsigned char *dmabuf;
-	struct xenon_nand nand;
-};
+	xenon_nand nand;
+} xenon_sfc, *pxenon_sfc;
 
-static struct xenon_sfc sfc;
+static xenon_sfc sfc;
 
 
 static const struct pci_device_id xenon_sfc_pci_tbl[] = {
@@ -675,6 +648,10 @@ int xenon_sfc_eraseblocks(int block, int block_cnt)
 	return _xenon_sfc_eraseblocks(block, block_cnt);
 }
 
+xenon_nand xenon_sfc_getnandstruct(void)
+{
+	return sfc.nand;
+}
 
 
 static int _xenon_sfc_enum_nand(void)

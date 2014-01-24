@@ -21,8 +21,13 @@
  * https://www.kernel.org/doc/htmldocs/mtdnand/
  * http://www.informit.com/articles/article.aspx?p=1187102&seqNum=1
  */
+ 
+ #include "xenon_sfc.h"
+ #include "xenon_nandfs.h"
 
 static int metatype = INVALID;
+
+static xenon_nand nand;
 
 void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
 	unsigned int i=0, val=0;
@@ -48,9 +53,9 @@ void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
 	edc[3] = (val >> 18) & 0xFF;
 }
 
-int xenon_nandfs_get_lba(METADATA *meta)
+int xenon_nandfs_get_lba(PMETADATA meta)
 {
-	switch (metatype)
+	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
 			return (((meta.sm.BlockID0&0xF)<<8)+(meta.sm.BlockID1));
@@ -62,9 +67,9 @@ int xenon_nandfs_get_lba(METADATA *meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_blocktype(METADATA *meta)
+int xenon_nandfs_get_blocktype(PMETADATA meta)
 {
-	switch (metatype)
+	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
 			return meta.sm.FsBlockType;
@@ -76,9 +81,9 @@ int xenon_nandfs_get_blocktype(METADATA *meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_badblock_mark(METADATA *meta)
+int xenon_nandfs_get_badblock_mark(PMETADATA meta)
 {
-	switch (metatype)
+	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
 			return meta.sm.BadBlock;
@@ -90,9 +95,9 @@ int xenon_nandfs_get_badblock_mark(METADATA *meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_fssize(METADATA *meta)
+int xenon_nandfs_get_fssize(PMETADATA meta)
 {
-	switch (metatype)
+	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
 			return ((meta.sm.FsSize0<<8)+meta.sm.FsSize1);
@@ -104,9 +109,9 @@ int xenon_nandfs_get_fssize(METADATA *meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_fsfreepages(METADATA *meta)
+int xenon_nandfs_get_fsfreepages(PMETADATA meta)
 {
-	switch (metatype)
+	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
 			return meta.sm.FsPageCount;
@@ -118,19 +123,53 @@ int xenon_nandfs_get_fsfreepages(METADATA *meta)
 	return INVALID;
 }
 
-int xenon_nandfs_check_ecc(METADATA *meta, char *pagedata)
+unsigned int xenon_nandfs_check_mmc_anchor_sha(unsigned char* buf)
+{
+	unsigned char* data = buf;
+	//CryptSha(&data[MMC_ANCHOR_HASH_LEN], (0x200-MMC_ANCHOR_HASH_LEN), NULL, 0, NULL, 0, sha, MMC_ANCHOR_HASH_LEN);
+}
+
+unsigned int xenon_nandfs_get_mmc_anchor_ver(unsigned char* buf)
+{
+	unsigned char* data = buf;
+	return __builtin_bswap32(data[MMC_ANCHOR_VERSION_POS]);
+}
+
+unsigned int xenon_nandfs_get_mmc_mobilesector(unsigned char* buf, int mobile_num)
+{
+	unsigned char* data = buf;
+	int offset = MMC_ANCHOR_MOBI_START+(mobile_num*MMC_ANCHOR_MOBI_SIZE);
+	
+	return __builtin_bswap16(data[offset]);
+}
+
+unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num)
+{
+	unsigned char* data = buf;
+	int offset = MMC_ANCHOR_MOBI_START+(mobile_num*MMC_ANCHOR_MOBI_SIZE)+0x4;
+	
+	return __builtin_bswap16(data[offset]);
+}
+
+int xenon_nandfs_check_ecc(PMETADATA meta, char pagedata)
 {
 }
 
-int xenon_nandfs_search_fsroot(METADATA *meta)
+int xenon_nandfs_find_mobile(PMETADATA meta)
 {
 }
 
-int xenon_nandfs_parse_fsroot(METADATA *meta)
+int xenon_nandfs_dump_mobile(PMETADATA meta)
 {
+	int mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
 }
 
 int xenon_nandfs_init_one(void)
 {
-	
+	nand = xenon_sfc_getnandstruct();
+	// Check struct
+	// Find Mobile(s)
+	// Dump Mobile(s)
+	// Parse FS-entries
+	// Parse LBA Map
 }

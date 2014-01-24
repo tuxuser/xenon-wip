@@ -1,6 +1,14 @@
 #ifndef _XENON_NANDFS_H
 #define _XENON_NANDFS_H
 
+#define MMC_ANCHOR_BLOCKS 		2
+#define MMC_ANCHOR_HASH_LEN		0x14
+#define MMC_ANCHOR_VERSION_POS	0x18
+#define MMC_ANCHOR_MOBI_START	0x1C
+#define MMC_ANCHOR_MOBI_SIZE	0x8
+
+#define MOBILE_BASE				0x30
+
 typedef struct _METADATA_SMALLBLOCK{
 	unsigned char BlockID1; // lba/id = (((BlockID0<<8)&0xF)+(BlockID1&0xFF))
 	unsigned char FsUnused0 : 4;
@@ -95,7 +103,7 @@ typedef struct _DUMPDATA{
 	int fsentry[10];
 	int fsentry_v;
 	int rootblock[0x1000];
-	struct _FS_ENT fs_ent;
+	FS_ENT fs_ent;
 } DUMPDATA, *PDUMPDATA;
 
 #endif
