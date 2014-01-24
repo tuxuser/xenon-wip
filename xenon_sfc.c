@@ -34,11 +34,14 @@
 #define SFC_SIZE 0x400
 #define DMA_SIZE 0x10000
 
+#define MAP_ADDR 0x80000200C8000000ULL
+
 #define DEBUG_OUT 1
 
 typedef struct _xenon_sfc
 {
 	void __iomem *base;
+	void __iomem *mappedflash;
 	wait_queue_head_t wait_q;
 	spinlock_t fifo_lock;
 	
@@ -470,6 +473,11 @@ static int _xenon_sfc_eraseblocks(int block, int block_cnt)
 	return 0;
 }
 
+static void _xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
+{
+	memcpy(buf, (sfc.mappedflash + startaddr), total_len);
+} 
+
 static int _xenon_sfc_writefullflash(unsigned char* buf)
 {
 	int cur_blk, config, wconfig;
@@ -648,6 +656,11 @@ int xenon_sfc_eraseblocks(int block, int block_cnt)
 	return _xenon_sfc_eraseblocks(block, block_cnt);
 }
 
+void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
+{
+	xenon_sfc_readmapdata(buf, startaddr, total_len);
+}
+
 xenon_nand xenon_sfc_getnandstruct(void)
 {
 	return sfc.nand;
@@ -680,7 +693,7 @@ static int _xenon_sfc_enum_nand(void)
 		sfc.nand.size_dump = 0x3000000;
 		sfc.nand.size_data = 0x3000000;
 		sfc.nand.size_spare = 0;
-		sfc.nand.size_usable_fs = 0xC00;
+		sfc.nand.size_usable_fs = 0xC00; // (sfc.nand.size_dump/sfc.nand.block_sz)
 
 #ifdef DEBUG_OUT
 		printk(KERN_INFO "MMC console detected\n");
@@ -851,23 +864,29 @@ static int xenon_sfc_init_one (struct pci_dev *pdev, const struct pci_device_id 
 	if (!sfc.base)
 		goto err_out_regions;
 
+	sfc.mappedflash = ioremap(MAP_ADDR, MAP_SIZE);
+	if (!sfc.mappedflash)
+		goto err_out_ioremap_base;
+
 	init_waitqueue_head(&sfc.wait_q);
 	spin_lock_init(&sfc.fifo_lock);
 	
 	if(_xenon_sfc_enum_nand() != 1) {
 		printk(KERN_INFO "NAND Enumeration failed!\n");
-		goto err_out_ioremap;
+		goto err_out_ioremap_map;
 	}
 	
 	sfc.dmabuf = dma_alloc_coherent(&pdev->dev, DMA_SIZE, &sfc.dmaaddr, GFP_KERNEL);
 	if (!sfc.dmabuf) {
-		goto err_out_ioremap;
+		goto err_out_ioremap_map;
 	}
 
 	return 0;
 
-
-err_out_ioremap:
+err_out_ioremap_map:
+	iounmap(sfc.mappedflash);
+	
+err_out_ioremap_base:
 	iounmap(sfc.base);
 
 err_out_regions:

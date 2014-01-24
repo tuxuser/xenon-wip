@@ -159,9 +159,35 @@ int xenon_nandfs_find_mobile(PMETADATA meta)
 {
 }
 
-int xenon_nandfs_dump_mobile(PMETADATA meta)
+unsigned char* xenon_nandfs_dump_mobile(PMETADATA meta, int mobile_num)
 {
-	int mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
+	int mob_sect, mob_size;
+	
+	if(nand.mmc)
+	{
+		int anchor_ver = 0;
+		int i, tmp, mmc_anchor_blk;
+		unsigned char* blockbuf = kzalloc(sfc.nand.block_sz, GFP_KERNEL);
+		mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
+		xenon_sfc_readmapdata(&blockbuf, (mmc_anchor_blk * nand.block_sz), (nand.block_sz * 2));
+		
+		for(i=0; i < MMC_ANCHOR_BLOCKS; i++)
+		{
+			tmp = xenon_nandfs_get_mmc_anchor_ver(&blockbuf[i*nand.block_sz]);
+			if(tmp > anchor_ver)
+			{
+				anchor_ver = tmp;
+				mob_sect = xenon_nandfs_get_mmc_mobilesector(&blockbuf[i*nand.block_sz], mobile_num);
+				mob_size = xenon_nandfs_get_mmc_mobilesize(&blockbuf[i*nand.block_sz], mobile_num);
+			}		
+		}
+		
+		mob_sect *= nand.block_sz;
+		mob_size *= nand.block_sz;
+	}
+	else
+	{
+	}
 }
 
 int xenon_nandfs_init_one(void)
