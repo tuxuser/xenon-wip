@@ -68,17 +68,10 @@ struct xenon_sfc
 	void __iomem *base;
 	wait_queue_head_t wait_q;
 	spinlock_t fifo_lock;
+	
 	dma_addr_t dmaaddr;
 	unsigned char *dmabuf;
 	struct xenon_nand nand;
-
-	unsigned long (*readreg)(int addr);
-	void (*writereg)(int addr, unsigned long data);
-	int (*readpage)(unsigned char* data, int page, int raw);
-	int (*writepage)(unsigned char* data, int page);
-	int (*readblock)(unsigned char* data, int block);
-	int (*writeblock)(unsigned char* data, int block);
-	int (*eraseblock)(int block);
 };
 
 static struct xenon_sfc sfc;
@@ -91,12 +84,12 @@ static const struct pci_device_id xenon_sfc_pci_tbl[] = {
 
 static inline unsigned long _xenon_sfc_readreg(int addr)
 {
-	return __builtin_bswap32(*(volatile unsigned int*)(sfc.base | addr));
+	return __builtin_bswap32(readl(sfc.base + addr));
 }
 
 static inline void _xenon_sfc_writereg(int addr, unsigned long data)
 {
-	*(volatile unsigned int*)(sfc.base | addr) = __builtin_bswap32(data);
+	writel(__builtin_bswap32(data), (sfc.base + addr));
 }
 
 static int _xenon_sfc_eraseblock(int block)
@@ -141,7 +134,7 @@ static int _xenon_sfc_eraseblock(int block)
 
 static int _xenon_sfc_readpage(unsigned char* buf, int page, int raw)
 {
-	int status, i;
+	int status, i, page_sz;
 	int addr = page * sfc.nand.page_sz;
 	unsigned char* data = buf;
 
@@ -175,7 +168,7 @@ static int _xenon_sfc_readpage(unsigned char* buf, int page, int raw)
 	// Set internal page buffer pointer to 0
 	_xenon_sfc_writereg(SFCX_ADDRESS, 0);
 
-	int page_sz = raw ? sfc.nand.page_sz_phys : sfc.nand.page_sz;
+	page_sz = raw ? sfc.nand.page_sz_phys : sfc.nand.page_sz;
 
 	for (i = 0; i < page_sz ; i += 4)
 	{
@@ -321,7 +314,7 @@ static int _xenon_sfc_writeblock(unsigned char* buf, int block)
 			_xenon_sfc_writereg(SFCX_ADDRESS, cur_addr);
 			_xenon_sfc_writereg(SFCX_COMMAND, DMA_RAM_TO_PHY);
 			
-			while(status = _xenon_sfc_readreg(SFCX_STATUS) & STATUS_BUSY);
+			while(_xenon_sfc_readreg(SFCX_STATUS) & STATUS_BUSY);
 			
 			status = _xenon_sfc_readreg(SFCX_STATUS);
 			if(status&STATUS_ERROR)
@@ -334,7 +327,7 @@ static int _xenon_sfc_writeblock(unsigned char* buf, int block)
 static int _xenon_sfc_readblocks(unsigned char* buf, int block, int block_cnt)
 {
 	int cur_blk, config, wconfig;
-	int sz = (block_cnt*sfc.nand.block_sz_phys);
+	//int sz = (block_cnt*sfc.nand.block_sz_phys);
 	//unsigned char *buf = (unsigned char *)vmalloc(block_cnt*sfc.nand.block_sz_phys);
 	//unsigned char *buf = (unsigned char *)VirtualAlloc(0, (block_cnt*sfc.nand.block_sz_phys), MEM_COMMIT|MEM_LARGE_PAGES, PAGE_READWRITE);
 	
@@ -396,7 +389,7 @@ static int _xenon_sfc_writeblocks(unsigned char *buf, int block, int block_cnt)
 	
 	unsigned char* blk_data;
 	unsigned char* data = buf;
-	int sz = (block_cnt*sfc.nand.block_sz_phys);
+	//int sz = (block_cnt*sfc.nand.block_sz_phys);
 	unsigned char* blockbuf = kzalloc(sfc.nand.block_sz_phys, GFP_KERNEL);
 	
 	if(((block+block_cnt)*sfc.nand.block_sz_phys) > sfc.nand.size_dump)
@@ -465,7 +458,7 @@ static int _xenon_sfc_eraseblocks(int block, int block_cnt)
 {
 	int cur_blk, config, wconfig, status;
 	
-	int sz = (block_cnt*sfc.nand.block_sz_phys);
+	//int sz = (block_cnt*sfc.nand.block_sz_phys);
 	if(sfc.nand.mmc)
 	{
 /*
@@ -621,27 +614,27 @@ static int _xenon_sfc_readfullflash(unsigned char* buf)
 
 unsigned long xenon_sfc_readreg(int addr)
 {
-	return sfc.readreg(addr);
+	return _xenon_sfc_readreg(addr);
 }
 
 void xenon_sfc_writereg(int addr, unsigned long data)
 {
-	return sfc.writereg(addr, data);
+	_xenon_sfc_writereg(addr, data);
 }
 
 int xenon_sfc_readpage_phy(unsigned char* buf, int page)
 {
-	return sfc.readpage(buf, page, 1);
+	return _xenon_sfc_readpage(buf, page, 1);
 }
 
 int xenon_sfc_readpage_log(unsigned char* buf, int page)
 {
-	return sfc.readpage(buf, page, 0);
+	return _xenon_sfc_readpage(buf, page, 0);
 }
 
 int xenon_sfc_writepage(unsigned char* buf, int page)
 {
-	return sfc.writepage(buf, page);
+	return _xenon_sfc_writepage(buf, page);
 }
 
 int xenon_sfc_readblock(unsigned char* buf, int block)
@@ -760,7 +753,7 @@ static int _xenon_sfc_enum_nand(void)
 						sfc.nand.size_usable_fs = 0xF80;
 						break;
 					default:
-						printk(KERN_INFO "unknown T%s NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
+						printk(KERN_INFO "unknown T%i NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
 						return 0;
 				}
 				break;
@@ -788,7 +781,7 @@ static int _xenon_sfc_enum_nand(void)
 						sfc.nand.size_usable_fs = 0x1E0;
 						break;
 					default:
-						printk(KERN_INFO "unknown T%s NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
+						printk(KERN_INFO "unknown T%i NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
 						return 0;
 				}
 				break;
@@ -826,7 +819,7 @@ static int _xenon_sfc_enum_nand(void)
 					//case 3: // big block, but with blocks twice the size of known big blocks above...
 					//	break;
 					default:
-						printk(KERN_INFO "unknown T%s NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
+						printk(KERN_INFO "unknown T%i NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
 						return 0;
 				}
 				break;
@@ -893,16 +886,7 @@ static int xenon_sfc_init_one (struct pci_dev *pdev, const struct pci_device_id 
 	if (!sfc.dmabuf) {
 		goto err_out_ioremap;
 	}
-	
 
-	sfc.readreg = _xenon_sfc_readreg;
-	sfc.writereg = _xenon_sfc_writereg;
-	sfc.readpage = _xenon_sfc_readpage;
-	sfc.writepage = _xenon_sfc_writepage;
-	sfc.readblock = _xenon_sfc_readblock;
-	sfc.writeblock = _xenon_sfc_writeblock;
-	sfc.eraseblock = _xenon_sfc_eraseblock;
-	
 	return 0;
 
 
@@ -920,14 +904,6 @@ err_out:
 
 static void xenon_sfc_remove(struct pci_dev *pdev)
 {
-	sfc.readreg = NULL;
-	sfc.writereg = NULL;
-	sfc.readpage = NULL;
-	sfc.writepage = NULL;
-	sfc.readblock = NULL;
-	sfc.writeblock = NULL;
-	sfc.eraseblock = NULL;
-
 	dma_free_coherent(&pdev->dev, DMA_SIZE, sfc.dmabuf, sfc.dmaaddr);
 	iounmap(sfc.base);
 
