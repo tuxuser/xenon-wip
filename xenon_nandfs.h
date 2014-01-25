@@ -117,4 +117,21 @@ typedef struct _DUMPDATA{
 	FS_ENT* fs_ent;
 } DUMPDATA, *PDUMPDATA;
 
+void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc);
+int xenon_nandfs_get_lba(METADATA* meta);
+int xenon_nandfs_get_blocktype(METADATA* meta);
+int xenon_nandfs_get_badblock_mark(METADATA* meta);
+int xenon_nandfs_get_fssize(METADATA* meta);
+int xenon_nandfs_get_fsfreepages(METADATA* meta);
+int xenon_nandfs_get_fssequence(METADATA* meta);
+unsigned int xenon_nandfs_check_mmc_anchor_sha(unsigned char* buf);
+unsigned int xenon_nandfs_get_mmc_anchor_ver(unsigned char* buf);
+unsigned int xenon_nandfs_get_mmc_mobileblock(unsigned char* buf, int mobile_num);
+unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num);
+int xenon_nandfs_dump_lba(void);
+int xenon_nandfs_check_ecc(PAGEDATA* pdata);
+int xenon_nandfs_find_mobile(int mobi);
+int xenon_nandfs_dump_mobile(void);
+int xenon_nandfs_init_one(void);
+
 #endif

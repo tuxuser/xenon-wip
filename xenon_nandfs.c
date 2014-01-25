@@ -152,7 +152,7 @@ unsigned int xenon_nandfs_get_mmc_anchor_ver(unsigned char* buf)
 	return __builtin_bswap32(data[MMC_ANCHOR_VERSION_POS]);
 }
 
-unsigned int xenon_nandfs_get_mmc_mobilesector(unsigned char* buf, int mobile_num)
+unsigned int xenon_nandfs_get_mmc_mobileblock(unsigned char* buf, int mobile_num)
 {
 	unsigned char* data = buf;
 	int mob = mobile_num - MOBILE_BASE;
@@ -170,9 +170,41 @@ unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num)
 	return __builtin_bswap16(data[offset]);
 }
 
-int xenon_nandfs_check_ecc(PAGEDATA* data)
+int xenon_nandfs_dump_lba(void)
 {
+	int block, lba;
+	METADATA* meta;
+	unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
+	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);
+	
+	if(nand.mmc)
+	{
+		for(block=0;block<nand.blocks_count;block++)
+			dumpdata.lba_map[block] = block; // Hail to the phison, just this one time
+	}
+	else
+	{
+		for(block=0;block<nand.blocks_count;block++)
+		{
+			xenon_sfc_readblock_separate(userbuf, sparebuf, block);
+			meta = (METADATA*)sparebuf;
+			lba = xenon_nandfs_get_lba(meta);
+			dumpdata.lba_map[block] = lba;
+		}
+	}
+	
+	vfree(userbuf);
+	vfree(sparebuf);
 	return 0;
+}
+
+int xenon_nandfs_check_ecc(PAGEDATA* pdata)
+{
+	unsigned char ecd[4];
+	xenon_nandfs_calcecc((unsigned int*)pdata->user, ecd);
+	if ((ecd[0] == pdata->meta.sm.ECC0) && (ecd[1] == pdata->meta.sm.ECC1) && (ecd[2] == pdata->meta.sm.ECC2) && (ecd[3] == pdata->meta.sm.ECC3))
+		return 0;
+	return 1;
 }
 
 int xenon_nandfs_find_mobile(int mobi)
@@ -243,7 +275,7 @@ int xenon_nandfs_dump_mobile(void)
 
 		for(mobi = 0x30; mobi < 0x3F; mobi++)
 		{
-			mobi_blk = xenon_nandfs_get_mmc_mobilesector(&blockbuf[anchor_num*nand.block_sz], mobi);
+			mobi_blk = xenon_nandfs_get_mmc_mobileblock(&blockbuf[anchor_num*nand.block_sz], mobi);
 			mobi_size = xenon_nandfs_get_mmc_mobilesize(&blockbuf[anchor_num*nand.block_sz], mobi);
 			mobi_size *= nand.block_sz;
 			mobi_blk *= nand.block_sz;
@@ -345,7 +377,7 @@ int xenon_nandfs_init_one(void)
 {
 	xenon_sfc_getnandstruct(&nand);
 	xenon_nandfs_dump_mobile();
+	xenon_nandfs_dump_lba();
 
-	// Parse LBA Map
 	return 0;
 }
