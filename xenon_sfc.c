@@ -259,6 +259,39 @@ static int _xenon_sfc_readblock(unsigned char* buf, int block)
 	return 0;
 }
 
+static int _xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block)
+{
+	int cur_blk, config, wconfig;
+	unsigned char* data = (unsigned char *)vmalloc(sfc.nand.block_sz_phys);
+	
+	if(user && spare)
+	{
+		config = _xenon_sfc_readreg(SFCX_CONFIG);
+		wconfig = (config&~(CONFIG_DMA_LEN|CONFIG_INT_EN|CONFIG_WP_EN));
+		if(sfc.nand.is_bb)
+			wconfig = wconfig|CONFIG_DMA_PAGES(4); // change to 4 pages, bb 4 pages = 16 small pages
+		else
+			wconfig = wconfig|CONFIG_DMA_PAGES(16); // change to 16 pages
+		_xenon_sfc_writereg(SFCX_CONFIG, wconfig);
+
+// 		printk(KERN_INFO "Reading block %x of %x at block %x (%x)\n", blk, block_cnt, blk+block, (blk+block)*sfc.nand.block_sz_phys);
+		_xenon_sfc_readblock(buf, block);
+
+		_xenon_sfc_writereg(SFCX_CONFIG, config);
+	}
+	else
+		printk(KERN_INFO "supplied buffers weren't allocated for readblock_separate\n");
+	
+	for(i = 0; i < sfc.nand.pages_in_block; i++)
+	{
+		memcpy(user, &data[(i*sfc.nand.page_sz_phys)], sfc.nand.page_sz);
+		memcpy(spare, &data[(i*sfc.nand.page_sz_phys)+sfc.nand.page_sz], sfc.nand.meta_sz); 
+		user += sfc.nand.page_sz;
+		spare += sfc.nand.meta_sz;
+	}
+	return 0;	
+}
+
 static int _xenon_sfc_writeblock(unsigned char* buf, int block)
 {
 	int status, i, block_wrote;
@@ -621,6 +654,11 @@ int xenon_sfc_writepage(unsigned char* buf, int page)
 int xenon_sfc_readblock(unsigned char* buf, int block)
 {
 	return _xenon_sfc_readblock(buf, block);
+}
+
+int xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block)
+{
+	return _xenon_sfc_readblock_separate(user, spare, block);
 }
 
 int xenon_sfc_writeblock(unsigned char* buf, int block)

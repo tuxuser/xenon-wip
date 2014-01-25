@@ -122,6 +122,7 @@ int xenon_sfc_readpage_phy(unsigned char* buf, int page);
 int xenon_sfc_readpage_log(unsigned char* buf, int page);
 int xenon_sfc_writepage(unsigned char* buf, int page);
 int xenon_sfc_readblock(unsigned char* buf, int block);
+int xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block);
 int xenon_sfc_writeblock(unsigned char* buf, int block);
 int xenon_sfc_readblocks(unsigned char* buf, int block, int block_cnt);
 int xenon_sfc_writeblocks(unsigned char* buf, int block, int block_cnt);

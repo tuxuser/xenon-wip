@@ -8,6 +8,7 @@
 #define MMC_ANCHOR_MOBI_SIZE	0x8
 
 #define MOBILE_BASE				0x30
+#define MOBILE_FSROOT			0x30
 
 typedef struct _METADATA_SMALLBLOCK{
 	unsigned char BlockID1; // lba/id = (((BlockID0<<8)&0xF)+(BlockID1&0xFF))
