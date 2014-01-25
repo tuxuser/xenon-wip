@@ -25,6 +25,19 @@
  #include "xenon_sfc.h"
  #include "xenon_nandfs.h"
 
+#define DEBUG_OUT
+
+#ifdef DEBUG_OUT
+
+#define xenon_sfc_readblock_separate debug_readblock_separate
+#define xenon_sfc_readmapdata debug_readmapdate
+#define xenon_sfc_getnandstruct debug_getnandstruct
+
+unsigned char *sparedata;
+unsigned char *userdata;
+
+#endif
+
 static int metatype = INVALID;
 
 static xenon_nand nand;
@@ -54,7 +67,7 @@ void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
 	edc[3] = (val >> 18) & 0xFF;
 }
 
-int xenon_nandfs_get_lba(PMETADATA meta)
+int xenon_nandfs_get_lba(METADATA meta)
 {
 	switch (nand.meta_type)
 	{
@@ -68,7 +81,7 @@ int xenon_nandfs_get_lba(PMETADATA meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_blocktype(PMETADATA meta)
+int xenon_nandfs_get_blocktype(METADATA meta)
 {
 	switch (nand.meta_type)
 	{
@@ -82,7 +95,7 @@ int xenon_nandfs_get_blocktype(PMETADATA meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_badblock_mark(PMETADATA meta)
+int xenon_nandfs_get_badblock_mark(METADATA meta)
 {
 	switch (nand.meta_type)
 	{
@@ -96,7 +109,7 @@ int xenon_nandfs_get_badblock_mark(PMETADATA meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_fssize(PMETADATA meta)
+int xenon_nandfs_get_fssize(METADATA meta)
 {
 	switch (nand.meta_type)
 	{
@@ -105,12 +118,12 @@ int xenon_nandfs_get_fssize(PMETADATA meta)
 		case META_TYPE_BOS:
 			return (((meta.bos.FsSize0<<8)&0xFF)+(meta.bos.FsSize1&0xFF));
 		case META_TYPE_BG:
-			return ((meta.bg.FsSize0<<16)+(meta.bg.FsSize1<<8)+meta.bg.FsSize2);
+			return (((meta.bg.FsSize0&0xFF)<<8)+(meta.bg.FsSize1&0xFF));
 	}
 	return INVALID;
 }
 
-int xenon_nandfs_get_fsfreepages(PMETADATA meta)
+int xenon_nandfs_get_fsfreepages(METADATA meta)
 {
 	switch (nand.meta_type)
 	{
@@ -124,16 +137,16 @@ int xenon_nandfs_get_fsfreepages(PMETADATA meta)
 	return INVALID;
 }
 
-int xenon_nandfs_get_fssequence(PMETADATA meta)
+int xenon_nandfs_get_fssequence(METADATA meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta.sm.FsSequence0+(meta.sm.FsSequence1<<8)+(meta.sm.FsSequence2<<16)+(meta.sm.FsSequence3 << 24);
+			return meta.sm.FsSequence0+(meta.sm.FsSequence1<<8)+(meta.sm.FsSequence2<<16);
 		case META_TYPE_BOS:
-			return meta.bos.FsSequence0+(meta.bos.FsSequence1<<8)+(meta.bos.FsSequence2<<16)+(meta.bos.FsSequence3 << 24);
+			return meta.bos.FsSequence0+(meta.bos.FsSequence1<<8)+(meta.bos.FsSequence2<<16);
 		case META_TYPE_BG:
-			return meta.bg.FsSequence0+(meta.bg.FsSequence1<<8)+(meta.bg.FsSequence2<<16)+(meta.bg.FsSequence3 << 24);;
+			return meta.bg.FsSequence0+(meta.bg.FsSequence1<<8)+(meta.bg.FsSequence2<<16);
 	}
 	return INVALID;
 }
@@ -168,16 +181,16 @@ unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num)
 	return __builtin_bswap16(data[offset]);
 }
 
-int xenon_nandfs_check_ecc(PMETADATA meta, char pagedata)
+int xenon_nandfs_check_ecc(METADATA meta, char pagedata)
 {
 }
 
-int xenon_nandfs_find_mobile(PMETADATA meta, int mobi)
+int xenon_nandfs_find_mobile(int mobi)
 {
 	unsigned int block, fini = 0;
 	unsigned int curver=0, tempver;
-	unsigned char* userbuf = kzalloc((nand.block_sz), GFP_KERNEL);
-	unsigned char* sparebuf = kzalloc((nand.meta_sz*nand.pages_in_block), GFP_KERNEL);	
+	unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
+	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);	
 	METADATA* meta;
 
 	for(block = 0; block < nand.blocks_count; block++)
@@ -192,24 +205,28 @@ int xenon_nandfs_find_mobile(PMETADATA meta, int mobi)
 			if(tempver >= curver)
 			{
 				curver = tempver;
-				fini = i;
+				fini = block;
 			}
 		}
 	}
+	free(userbuf);
+	free(sparebuf);
 	return fini;
 }
 
-unsigned char* xenon_nandfs_dump_mobile(PMETADATA meta)
+int xenon_nandfs_dump_mobile(void)
 {
 	unsigned short mobi;
-	int ret = 0, mobi_blk, mobi_size, block;
+	int i, j, tmp, mobi_blk, mobi_size, block;
+	int ret = 0;
+	int anchor_ver = 0;
+	int anchor_num = -1;
 	char mobileName[] = {"MobileA"};
+	METADATA* meta;
 
 	if(nand.mmc)
 	{
-		int anchor_ver = 0, anchor_num = -1;
-		int i, tmp;
-		unsigned char* blockbuf = kzalloc((nand.block_sz * 2), GFP_KERNEL);
+		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.block_sz * 2);
 		int mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
 		
 		xenon_sfc_readmapdata(&blockbuf, (mmc_anchor_blk * nand.block_sz), (nand.block_sz * 2));
@@ -247,20 +264,20 @@ unsigned char* xenon_nandfs_dump_mobile(PMETADATA meta)
 			else
 			{
 				mobileName[6] = mobi+0x11;
-				printf("%s found at block 0x%x, size %d (0x%x) bytes\n", mobileName, mob_blk, mobi_size, mobi_size);	
+				printf("%s found at block 0x%x, size %d (0x%x) bytes\n", mobileName, mobi_blk, mobi_size, mobi_size);	
 			}
 		}
-		kfree(blockbuf);
+		free(blockbuf);
 	}
 	else
 	{
 		for(mobi = 0x30; mobi < 0x3F; mobi++)
 		{
-			block = xenon_nandfs_find_mobile(blocks, mobi);
+			block = xenon_nandfs_find_mobile(mobi);
 			if(block != 0)
 			{
-				unsigned char* userbuf = kzalloc((nand.block_sz), GFP_KERNEL);
-				unsigned char* sparebuf = kzalloc((nand.meta_sz*nand.pages_in_block), GFP_KERNEL);
+				unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
+				unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);
 				
 				xenon_sfc_readblock_separate(userbuf, sparebuf, block);
 				meta = (METADATA*)sparebuf;
@@ -268,17 +285,17 @@ unsigned char* xenon_nandfs_dump_mobile(PMETADATA meta)
 				if(mobi == MOBILE_FSROOT) // fs root
 				{
 					printf("FSRoot found at block 0x%x, size %d (0x%x) bytes\n", block, nand.block_sz, nand.block_sz);
-					offset = 0;
+					tmp = 0;
 					for(i=0; i < nand.meta_sz; i++) // copy alternating 512 bytes into each buf
 					{
 						for(j=0; j < nand.page_sz; j++)
 						{
-							RootBuf[rootOff+j] = userbuf[offset+j];
-							fsRootFileBuf[fileOff+j] = userbuf[offset+j+nand.page_sz];
+							RootBuf[rootOff+j] = userbuf[tmp+j];
+							fsRootFileBuf[fileOff+j] = userbuf[tmp+j+nand.page_sz];
 						}
 						rootOff += nand.page_sz;
 						fileOff += nand.page_sz;
-						offset  += (2 * nand.page_sz);
+						tmp  += (2 * nand.page_sz);
 					}
 					ret = 1;
 				}
@@ -304,19 +321,31 @@ unsigned char* xenon_nandfs_dump_mobile(PMETADATA meta)
 					mobileName[6] = mobi+0x11;
 					printf("%s found at block 0x%x, page %d, size %d (0x%x) bytes\n", mobileName, block, j, size, size);
 				}
-				kfree(userbuf);
-				kfree(sparebuf);
+				free(userbuf);
+				free(sparebuf);
 			}
 		}
 	}
+	return ret;
 }
 
 int xenon_nandfs_init_one(void)
 {
-	nand = xenon_sfc_getnandstruct();
+	xenon_sfc_getnandstruct(&nand);
+	xenon_nandfs_dump_mobile();
 	// Check struct
 	// Find Mobile(s)
 	// Dump Mobile(s)
 	// Parse FS-entries
 	// Parse LBA Map
 }
+
+#ifdef DEBUG_OUT
+
+
+
+int main(int argc, char *argv[])
+{
+	xenon_nandfs_init_one();
+}
+#endif

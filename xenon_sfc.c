@@ -399,7 +399,7 @@ static int _xenon_sfc_writeblocks(unsigned char *buf, int block, int block_cnt)
 	unsigned char* blk_data;
 	unsigned char* data = buf;
 	//int sz = (block_cnt*sfc.nand.block_sz_phys);
-	unsigned char* blockbuf = kzalloc(sfc.nand.block_sz_phys, GFP_KERNEL);
+	unsigned char* blockbuf = (unsigned char *)vmalloc(sfc.nand.block_sz_phys);
 	
 	if(((block+block_cnt)*sfc.nand.block_sz_phys) > sfc.nand.size_dump)
 	{
@@ -515,7 +515,7 @@ static int _xenon_sfc_writefullflash(unsigned char* buf)
 {
 	int cur_blk, config, wconfig;
 	unsigned char* data;
-	unsigned char* blockbuf = kzalloc(sfc.nand.block_sz_phys, GFP_KERNEL);
+	unsigned char* blockbuf = (unsigned char *)vmalloc(sfc.nand.block_sz_phys);
 // 	printk(KERN_INFO "writing flash\n");
 
 	if(sfc.nand.mmc)
@@ -699,9 +699,9 @@ void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
 	xenon_sfc_readmapdata(buf, startaddr, total_len);
 }
 
-xenon_nand xenon_sfc_getnandstruct(void)
+void xenon_sfc_getnandstruct(xenon_nand* xe_nand)
 {
-	return sfc.nand;
+	xe_nand = sfc.nand;
 }
 
 

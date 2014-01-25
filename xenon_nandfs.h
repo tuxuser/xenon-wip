@@ -84,19 +84,19 @@ typedef struct _PAGEDATA{
 } PAGEDATA, *PPAGEDATA;
 
 typedef struct _FS_TIME_STAMP{
-	u32 DoubleSeconds : 5;
-	u32 Minute : 6;
-	u32 Hour : 5;
-	u32 Day : 5;
-	u32 Month : 4;
-	u32 Year : 7;
+	unsigned int DoubleSeconds : 5;
+	unsigned int Minute : 6;
+	unsigned int Hour : 5;
+	unsigned int Day : 5;
+	unsigned int Month : 4;
+	unsigned int Year : 7;
 } FS_TIME_STAMP;
 
 typedef struct _FS_ENT{
 	char fileName[22];
-	u16 startCluster; //u8 startCluster[2];
-	u32 clusterSz; //u8 clusterSz[4];
-	u32 typeTime;
+	unsigned short startCluster; //u8 startCluster[2];
+	unsigned int clusterSz; //u8 clusterSz[4];
+	unsigned int typeTime;
 } FS_ENT, *PFS_ENT;
 
 typedef struct _DUMPDATA{
