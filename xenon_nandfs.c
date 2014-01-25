@@ -21,24 +21,12 @@
  * https://www.kernel.org/doc/htmldocs/mtdnand/
  * http://www.informit.com/articles/article.aspx?p=1187102&seqNum=1
  */
- 
- #include "xenon_sfc.h"
- #include "xenon_nandfs.h"
+
+#include <linux/vmalloc.h>
+#include "xenon_sfc.h"
+#include "xenon_nandfs.h"
 
 #define DEBUG_OUT
-
-#ifdef DEBUG_OUT
-
-#define xenon_sfc_readblock_separate debug_readblock_separate
-#define xenon_sfc_readmapdata debug_readmapdate
-#define xenon_sfc_getnandstruct debug_getnandstruct
-
-unsigned char *sparedata;
-unsigned char *userdata;
-
-#endif
-
-static int metatype = INVALID;
 
 static xenon_nand nand;
 static DUMPDATA dumpdata;
@@ -67,94 +55,95 @@ void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
 	edc[3] = (val >> 18) & 0xFF;
 }
 
-int xenon_nandfs_get_lba(METADATA meta)
+int xenon_nandfs_get_lba(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return (((meta.sm.BlockID0&0xF)<<8)+(meta.sm.BlockID1));
+			return (((meta->sm.BlockID0&0xF)<<8)+(meta->sm.BlockID1));
 		case META_TYPE_BOS:
-			return (((meta.bos.BlockID0<<8)&0xF)+(meta.bos.BlockID1&0xFF));
+			return (((meta->bos.BlockID0<<8)&0xF)+(meta->bos.BlockID1&0xFF));
 		case META_TYPE_BG:
-			return (((meta.bg.BlockID0&0xF)<<8)+(meta.bg.BlockID1&0xFF));
+			return (((meta->bg.BlockID0&0xF)<<8)+(meta->bg.BlockID1&0xFF));
 	}
 	return INVALID;
 }
 
-int xenon_nandfs_get_blocktype(METADATA meta)
+int xenon_nandfs_get_blocktype(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta.sm.FsBlockType;
+			return meta->sm.FsBlockType;
 		case META_TYPE_BOS:
-			return meta.bos.FsBlockType;
+			return meta->bos.FsBlockType;
 		case META_TYPE_BG:
-			return meta.bg.FsBlockType;
+			return meta->bg.FsBlockType;
 	}
 	return INVALID;
 }
 
-int xenon_nandfs_get_badblock_mark(METADATA meta)
+int xenon_nandfs_get_badblock_mark(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta.sm.BadBlock;
+			return meta->sm.BadBlock;
 		case META_TYPE_BOS:
-			return meta.bos.BadBlock;
+			return meta->bos.BadBlock;
 		case META_TYPE_BG:
-			return meta.bg.BadBlock;
+			return meta->bg.BadBlock;
 	}
 	return INVALID;
 }
 
-int xenon_nandfs_get_fssize(METADATA meta)
+int xenon_nandfs_get_fssize(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return ((meta.sm.FsSize0<<8)+meta.sm.FsSize1);
+			return ((meta->sm.FsSize0<<8)+meta->sm.FsSize1);
 		case META_TYPE_BOS:
-			return (((meta.bos.FsSize0<<8)&0xFF)+(meta.bos.FsSize1&0xFF));
+			return (((meta->bos.FsSize0<<8)&0xFF)+(meta->bos.FsSize1&0xFF));
 		case META_TYPE_BG:
-			return (((meta.bg.FsSize0&0xFF)<<8)+(meta.bg.FsSize1&0xFF));
+			return (((meta->bg.FsSize0&0xFF)<<8)+(meta->bg.FsSize1&0xFF));
 	}
 	return INVALID;
 }
 
-int xenon_nandfs_get_fsfreepages(METADATA meta)
+int xenon_nandfs_get_fsfreepages(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta.sm.FsPageCount;
+			return meta->sm.FsPageCount;
 		case META_TYPE_BOS:
-			return meta.bos.FsPageCount;
+			return meta->bos.FsPageCount;
 		case META_TYPE_BG:
-			return (meta.bg.FsPageCount * 4);
+			return (meta->bg.FsPageCount * 4);
 	}
 	return INVALID;
 }
 
-int xenon_nandfs_get_fssequence(METADATA meta)
+int xenon_nandfs_get_fssequence(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta.sm.FsSequence0+(meta.sm.FsSequence1<<8)+(meta.sm.FsSequence2<<16);
+			return meta->sm.FsSequence0+(meta->sm.FsSequence1<<8)+(meta->sm.FsSequence2<<16);
 		case META_TYPE_BOS:
-			return meta.bos.FsSequence0+(meta.bos.FsSequence1<<8)+(meta.bos.FsSequence2<<16);
+			return meta->bos.FsSequence0+(meta->bos.FsSequence1<<8)+(meta->bos.FsSequence2<<16);
 		case META_TYPE_BG:
-			return meta.bg.FsSequence0+(meta.bg.FsSequence1<<8)+(meta.bg.FsSequence2<<16);
+			return meta->bg.FsSequence0+(meta->bg.FsSequence1<<8)+(meta->bg.FsSequence2<<16);
 	}
 	return INVALID;
 }
 
 unsigned int xenon_nandfs_check_mmc_anchor_sha(unsigned char* buf)
 {
-	unsigned char* data = buf;
+	//unsigned char* data = buf;
 	//CryptSha(&data[MMC_ANCHOR_HASH_LEN], (0x200-MMC_ANCHOR_HASH_LEN), NULL, 0, NULL, 0, sha, MMC_ANCHOR_HASH_LEN);
+	return 0;
 }
 
 unsigned int xenon_nandfs_get_mmc_anchor_ver(unsigned char* buf)
@@ -181,13 +170,14 @@ unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num)
 	return __builtin_bswap16(data[offset]);
 }
 
-int xenon_nandfs_check_ecc(METADATA meta, char pagedata)
+int xenon_nandfs_check_ecc(PAGEDATA* data)
 {
+	return 0;
 }
 
 int xenon_nandfs_find_mobile(int mobi)
 {
-	unsigned int block, fini = 0;
+	unsigned int block, fini = 0, v = 0;
 	unsigned int curver=0, tempver;
 	unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
 	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);	
@@ -206,18 +196,22 @@ int xenon_nandfs_find_mobile(int mobi)
 			{
 				curver = tempver;
 				fini = block;
+				dumpdata.fsroot_blk[v] = block;
+				dumpdata.fsroot_v[v] = curver;
+				v++;
 			}
 		}
 	}
-	free(userbuf);
-	free(sparebuf);
+	vfree(userbuf);
+	vfree(sparebuf);
 	return fini;
 }
 
 int xenon_nandfs_dump_mobile(void)
 {
 	unsigned short mobi;
-	int i, j, tmp, mobi_blk, mobi_size, block;
+	int i, j, tmp, mobi_blk, mobi_size, page_each, mmc_anchor_blk;
+	int root_off, file_off, ttl_off;
 	int ret = 0;
 	int anchor_ver = 0;
 	int anchor_num = -1;
@@ -227,9 +221,9 @@ int xenon_nandfs_dump_mobile(void)
 	if(nand.mmc)
 	{
 		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.block_sz * 2);
-		int mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
+		mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
 		
-		xenon_sfc_readmapdata(&blockbuf, (mmc_anchor_blk * nand.block_sz), (nand.block_sz * 2));
+		xenon_sfc_readmapdata(blockbuf, (mmc_anchor_blk * nand.block_sz), (nand.block_sz * 2));
 		
 		for(i=0; i < MMC_ANCHOR_BLOCKS; i++)
 		{
@@ -242,8 +236,8 @@ int xenon_nandfs_dump_mobile(void)
 		
 		if(anchor_num == -1)
 		{
-			printf("MMC Anchor block wasn't found!");
-			kfree(blockbuf);
+			printk(KERN_INFO "MMC Anchor block wasn't found!");
+			vfree(blockbuf);
 			return 0;
 		}
 
@@ -256,56 +250,72 @@ int xenon_nandfs_dump_mobile(void)
 			if(mobi_blk == 0)
 				continue;
 
+			dumpdata.mobile_blocks[mobi-MOBILE_BASE] = mobi_blk;
+			dumpdata.mobile_size[mobi-MOBILE_BASE] = mobi_size;
+
 			if(mobi == MOBILE_FSROOT)
 			{
 				ret  = 1;
-				printf("FSRoot found at block 0x%x, size %d (0x%x) bytes\n", mobi_blk, nand.block_sz, nand.block_sz);
+				printk(KERN_INFO "FSRoot found at block 0x%x, size %d (0x%x) bytes\n", mobi_blk, nand.block_sz, nand.block_sz);
 			}
 			else
 			{
 				mobileName[6] = mobi+0x11;
-				printf("%s found at block 0x%x, size %d (0x%x) bytes\n", mobileName, mobi_blk, mobi_size, mobi_size);	
+				printk(KERN_INFO "%s found at block 0x%x, size %d (0x%x) bytes\n", mobileName, mobi_blk, mobi_size, mobi_size);	
 			}
 		}
-		free(blockbuf);
+		vfree(blockbuf);
 	}
 	else
 	{
 		for(mobi = 0x30; mobi < 0x3F; mobi++)
 		{
-			block = xenon_nandfs_find_mobile(mobi);
-			if(block != 0)
+			mobi_blk = xenon_nandfs_find_mobile(mobi);
+			if(mobi_blk != 0)
 			{
 				unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
 				unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);
+				unsigned char* fsrootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
+				unsigned char* rootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
 				
-				xenon_sfc_readblock_separate(userbuf, sparebuf, block);
+				xenon_sfc_readblock_separate(userbuf, sparebuf, mobi_blk);
 				meta = (METADATA*)sparebuf;
+
+				dumpdata.mobile_blocks[mobi-MOBILE_BASE] = mobi_blk;
 
 				if(mobi == MOBILE_FSROOT) // fs root
 				{
-					printf("FSRoot found at block 0x%x, size %d (0x%x) bytes\n", block, nand.block_sz, nand.block_sz);
-					tmp = 0;
-					for(i=0; i < nand.meta_sz; i++) // copy alternating 512 bytes into each buf
+					printk(KERN_INFO "FSRoot found at block 0x%x, size %d (0x%x) bytes\n", mobi_blk, nand.block_sz, nand.block_sz);
+					root_off = 0;
+					file_off = 0;
+					ttl_off = 0;
+					for(i=0; i<16; i++) // copy alternating 512 bytes into each buf
 					{
-						for(j=0; j < nand.page_sz; j++)
+						for(j=0; j<512; j++)
 						{
-							RootBuf[rootOff+j] = userbuf[tmp+j];
-							fsRootFileBuf[fileOff+j] = userbuf[tmp+j+nand.page_sz];
+							rootbuf[root_off+j] = userbuf[ttl_off+j];
+							fsrootbuf[file_off+j] = userbuf[ttl_off+j+512];
 						}
-						rootOff += nand.page_sz;
-						fileOff += nand.page_sz;
-						tmp  += (2 * nand.page_sz);
+						root_off += 512;
+						file_off += 512;
+						ttl_off  += 1024;
 					}
+					
+					for(i=0; i<256; i++)
+					{
+						dumpdata.fs_ent = (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
+						dumpdata.fs_ent++;
+					}
+					dumpdata.mobile_size[mobi-MOBILE_BASE] = 0;
 					ret = 1;
 				}
 				else
 				{
-					pageEach = nand.pages_in_block - xenon_nandfs_get_fsfreepages(meta);
+					page_each = nand.pages_in_block - xenon_nandfs_get_fsfreepages(meta);
 					//printf("pageEach: %x\n", pageEach);
 					// find the most recent instance in the block and dump it
 					j = 0;
-					for(i=0; i < nand.pages_in_block; i += pageEach)
+					for(i=0; i < nand.pages_in_block; i += page_each)
 					{
 						meta = (METADATA*)&sparebuf[nand.meta_sz*i];
 						//printf("i: %d type: %x\n", i, meta->FsBlockType);
@@ -316,13 +326,15 @@ int xenon_nandfs_dump_mobile(void)
 					}
 					
 					meta = (METADATA*)&sparebuf[j*nand.meta_sz];
-					size = xenon_nandfs_get_fssize(meta);
+					mobi_size = xenon_nandfs_get_fssize(meta);
+					
+					dumpdata.mobile_size[mobi-MOBILE_BASE] = mobi_size;
 					
 					mobileName[6] = mobi+0x11;
-					printf("%s found at block 0x%x, page %d, size %d (0x%x) bytes\n", mobileName, block, j, size, size);
+					printk(KERN_INFO "%s found at block 0x%x, page %d, size %d (0x%x) bytes\n", mobileName, mobi_blk, j, mobi_size, mobi_size);
 				}
-				free(userbuf);
-				free(sparebuf);
+				vfree(userbuf);
+				vfree(sparebuf);
 			}
 		}
 	}
@@ -333,19 +345,7 @@ int xenon_nandfs_init_one(void)
 {
 	xenon_sfc_getnandstruct(&nand);
 	xenon_nandfs_dump_mobile();
-	// Check struct
-	// Find Mobile(s)
-	// Dump Mobile(s)
-	// Parse FS-entries
+
 	// Parse LBA Map
+	return 0;
 }
-
-#ifdef DEBUG_OUT
-
-
-
-int main(int argc, char *argv[])
-{
-	xenon_nandfs_init_one();
-}
-#endif

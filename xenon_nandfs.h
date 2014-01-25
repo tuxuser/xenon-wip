@@ -7,8 +7,17 @@
 #define MMC_ANCHOR_MOBI_START	0x1C
 #define MMC_ANCHOR_MOBI_SIZE	0x8
 
+#define MAX_MOBILE				9
 #define MOBILE_BASE				0x30
 #define MOBILE_FSROOT			0x30
+#define BB_MOBILE_FSROOT		0x2C
+
+#define FSROOT_SIZE				0x2000
+
+#define MOBILE_PB			32				// pages counting towards FsPageCount
+#define MOBILE_MULTI		1				// small block multiplier for (MOBILE_PB-FsPageCount)
+#define BB_MOBILE_PB		(MOBILE_PB*2)	// pages counting towards FsPageCount
+#define BB_MOBILE_MULTI		4				// small block multiplier for (BB_MOBILE_PB-FsPageCount)
 
 typedef struct _METADATA_SMALLBLOCK{
 	unsigned char BlockID1; // lba/id = (((BlockID0<<8)&0xF)+(BlockID1&0xFF))
@@ -100,11 +109,12 @@ typedef struct _FS_ENT{
 } FS_ENT, *PFS_ENT;
 
 typedef struct _DUMPDATA{
-	int badblocks[100];
-	int fsentry[10];
-	int fsentry_v;
-	int rootblock[0x1000];
-	FS_ENT fs_ent;
+	int fsroot_blk[16];
+	int fsroot_v[16];
+	int lba_map[0x1000];
+	int mobile_blocks[MAX_MOBILE];
+	int mobile_size[MAX_MOBILE];
+	FS_ENT* fs_ent;
 } DUMPDATA, *PDUMPDATA;
 
 #endif

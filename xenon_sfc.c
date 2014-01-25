@@ -25,6 +25,7 @@
 #include <linux/mutex.h>
 #include <linux/dma-mapping.h>
 #include <linux/types.h>
+#include <linux/vmalloc.h>
 
 #include "xenon_sfc.h"
 
@@ -35,6 +36,7 @@
 #define DMA_SIZE 0x10000
 
 #define MAP_ADDR 0x80000200C8000000ULL
+#define MAP_SIZE 0x4000000
 
 #define DEBUG_OUT 1
 
@@ -261,7 +263,7 @@ static int _xenon_sfc_readblock(unsigned char* buf, int block)
 
 static int _xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block)
 {
-	int cur_blk, config, wconfig;
+	int config, wconfig, i;
 	unsigned char* data = (unsigned char *)vmalloc(sfc.nand.block_sz_phys);
 	
 	if(user && spare)
@@ -275,7 +277,7 @@ static int _xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spa
 		_xenon_sfc_writereg(SFCX_CONFIG, wconfig);
 
 // 		printk(KERN_INFO "Reading block %x of %x at block %x (%x)\n", blk, block_cnt, blk+block, (blk+block)*sfc.nand.block_sz_phys);
-		_xenon_sfc_readblock(buf, block);
+		_xenon_sfc_readblock(data, block);
 
 		_xenon_sfc_writereg(SFCX_CONFIG, config);
 	}
@@ -284,7 +286,7 @@ static int _xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spa
 	
 	for(i = 0; i < sfc.nand.pages_in_block; i++)
 	{
-		memcpy(user, &data[(i*sfc.nand.page_sz_phys)], sfc.nand.page_sz);
+		memcpy(user, &data[i*sfc.nand.page_sz_phys], sfc.nand.page_sz);
 		memcpy(spare, &data[(i*sfc.nand.page_sz_phys)+sfc.nand.page_sz], sfc.nand.meta_sz); 
 		user += sfc.nand.page_sz;
 		spare += sfc.nand.meta_sz;
@@ -584,7 +586,7 @@ static int _xenon_sfc_writefullflash(unsigned char* buf)
 		}
 		_xenon_sfc_writereg(SFCX_CONFIG, config);
 	}
-	kfree(blockbuf);
+	vfree(blockbuf);
 // 	printk(KERN_INFO "flash write complete\n");
 	return 0;
 }
@@ -696,12 +698,12 @@ int xenon_sfc_eraseblocks(int block, int block_cnt)
 
 void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
 {
-	xenon_sfc_readmapdata(buf, startaddr, total_len);
+	_xenon_sfc_readmapdata(buf, startaddr, total_len);
 }
 
 void xenon_sfc_getnandstruct(xenon_nand* xe_nand)
 {
-	xe_nand = sfc.nand;
+	xe_nand = &sfc.nand;
 }
 
 

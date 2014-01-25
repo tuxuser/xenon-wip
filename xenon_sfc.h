@@ -131,6 +131,8 @@ int xenon_sfc_writefullflash(unsigned char* buf);
 int xenon_sfc_eraseblock(int block);
 int xenon_sfc_eraseblocks(int block, int block_cnt);
 
+void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len);
+
 void xenon_sfc_getnandstruct(xenon_nand* xe_nand);
 
 
