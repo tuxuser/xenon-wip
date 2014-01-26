@@ -130,6 +130,7 @@ unsigned int xenon_nandfs_get_mmc_mobileblock(unsigned char* buf, int mobile_num
 unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num);
 int xenon_nandfs_check_ecc(PAGEDATA* pdata);
 int xenon_nandfs_find_mobile(METADATA* metadata, int mobi);
+int xenon_nandfs_parse_fsentries(unsigned char* userbuf);
 int xenon_nandfs_init(void);
 int xenon_nandfs_init_one(void);
 

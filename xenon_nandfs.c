@@ -193,11 +193,42 @@ int xenon_nandfs_find_mobile(METADATA* metadata, int mobi)
 	return -1;
 }
 
+int xenon_nandfs_parse_fsentries(unsigned char* userbuf)
+{
+	int i, j, root_off, file_off, ttl_off;
+	unsigned char* data = userbuf;
+	unsigned char* fsrootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
+	unsigned char* rootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
+	
+	root_off = 0;
+	file_off = 0;
+	ttl_off = 0;
+	for(i=0; i<16; i++) // copy alternating 512 bytes into each buf
+	{
+		for(j=0; j<512; j++)
+		{
+			rootbuf[root_off+j] = data[ttl_off+j];
+			fsrootbuf[file_off+j] = data[ttl_off+j+512];
+		}
+		root_off += 512;
+		file_off += 512;
+		ttl_off  += 1024;
+	}
+					
+	for(i=0; i<256; i++)
+	{
+		dumpdata.fs_ent = (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
+		dumpdata.fs_ent++;
+	}
+	vfree(fsrootbuf);
+	vfree(rootbuf);
+	return 0;
+}
+
 int xenon_nandfs_init(void)
 {
 	unsigned short mobi;
 	int i, j, tmp, lba, blk, mobi_blk, mobi_size, mobi_ver, page_each, mmc_anchor_blk;
-	int root_off, file_off, ttl_off;
 	int ret = 0;
 	int anchor_num = -1;
 	char mobileName[] = {"MobileA"};
@@ -206,6 +237,7 @@ int xenon_nandfs_init(void)
 	if(nand.mmc)
 	{
 		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.block_sz * 2);
+		unsigned char* fsrootbuf = (unsigned char *)vmalloc(nand.block_sz);
 		mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
 		mobi_ver = 0;
 		
@@ -237,24 +269,28 @@ int xenon_nandfs_init(void)
 			mobi_size = xenon_nandfs_get_mmc_mobilesize(&blockbuf[anchor_num*nand.block_sz], mobi);
 			mobi_size *= nand.block_sz;
 			mobi_blk *= nand.block_sz;
+			
 			if(mobi_blk == 0)
 				continue;
 
 			if(mobi == MOBILE_FSROOT)
 			{
+				printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobi_blk, mobi_ver, nand.block_sz, nand.block_sz);
+				xenon_sfc_readmapdata(fsrootbuf, mobi_blk, nand.block_sz);
+				xenon_nandfs_parse_fsentries(fsrootbuf);
 				ret  = 1;
-				printk(KERN_INFO "FSRoot found at block 0x%x, size %d (0x%x) bytes\n", mobi_blk, nand.block_sz, nand.block_sz);
 			}
 			else
 			{
 				mobileName[6] = mobi+0x11;
-				printk(KERN_INFO "%s found at block 0x%x, size %d (0x%x) bytes\n", mobileName, mobi_blk, mobi_size, mobi_size);	
+				printk(KERN_INFO "%s found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobileName, mobi_blk, mobi_ver, mobi_size, mobi_size);	
 			}
 			dumpdata.mobile_blocks[mobi-MOBILE_BASE] = mobi_blk;
 			dumpdata.mobile_size[mobi-MOBILE_BASE] = mobi_size;
 			dumpdata.mobile_ver[mobi-MOBILE_BASE] = mobi_ver; // actually the anchor version	
 		}
 		vfree(blockbuf);
+		vfree(fsrootbuf);
 	}
 	else
 	{
@@ -267,7 +303,7 @@ int xenon_nandfs_init(void)
 			meta = (METADATA*)sparebuf;
 		
 			lba = xenon_nandfs_get_lba(meta);
-			dumpdata.lba_map[blk] = lba;
+			dumpdata.lba_map[blk] = lba; // Create LBA map
 		
 			for(mobi = 0x30; mobi < 0x3F; mobi++)
 			{
@@ -279,35 +315,13 @@ int xenon_nandfs_init(void)
 				mobi_blk = blk;
 				
 				if((mobi_blk != 0) && (tmp > mobi_ver))
-				{
-					unsigned char* fsrootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
-					unsigned char* rootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
-					
+				{	
 					mobi_ver = tmp;
 					
 					if(mobi == MOBILE_FSROOT) // fs root
 					{
 						printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobi_blk, mobi_ver, nand.block_sz, nand.block_sz);
-						root_off = 0;
-						file_off = 0;
-						ttl_off = 0;
-						for(i=0; i<16; i++) // copy alternating 512 bytes into each buf
-						{
-							for(j=0; j<512; j++)
-							{
-								rootbuf[root_off+j] = userbuf[ttl_off+j];
-								fsrootbuf[file_off+j] = userbuf[ttl_off+j+512];
-							}
-							root_off += 512;
-							file_off += 512;
-							ttl_off  += 1024;
-						}
-					
-						for(i=0; i<256; i++)
-						{
-							dumpdata.fs_ent = (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
-							dumpdata.fs_ent++;
-						}
+						xenon_nandfs_parse_fsentries(userbuf);
 						mobi_size = 0;
 						ret = 1;
 					}
@@ -336,9 +350,6 @@ int xenon_nandfs_init(void)
 					dumpdata.mobile_blocks[mobi-MOBILE_BASE] = mobi_blk;
 					dumpdata.mobile_size[mobi-MOBILE_BASE] = mobi_size;
 					dumpdata.mobile_ver[mobi-MOBILE_BASE] = mobi_ver;
-					
-					vfree(fsrootbuf);
-					vfree(rootbuf);
 				}
 			}
 		}
