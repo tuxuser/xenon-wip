@@ -171,34 +171,6 @@ unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num)
 	return __builtin_bswap16(data[offset]);
 }
 
-int xenon_nandfs_dump_lba(void)
-{
-	int block, lba;
-	METADATA* meta;
-	unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
-	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);
-	
-	if(nand.mmc)
-	{
-		for(block=0;block<nand.blocks_count;block++)
-			dumpdata.lba_map[block] = block; // Hail to the phison, just this one time
-	}
-	else
-	{
-		for(block=0;block<nand.blocks_count;block++)
-		{
-			xenon_sfc_readblock_separate(userbuf, sparebuf, block);
-			meta = (METADATA*)sparebuf;
-			lba = xenon_nandfs_get_lba(meta);
-			dumpdata.lba_map[block] = lba;
-		}
-	}
-	
-	vfree(userbuf);
-	vfree(sparebuf);
-	return 0;
-}
-
 int xenon_nandfs_check_ecc(PAGEDATA* pdata)
 {
 	unsigned char ecd[4];
@@ -221,10 +193,10 @@ int xenon_nandfs_find_mobile(METADATA* metadata, int mobi)
 	return -1;
 }
 
-int xenon_nandfs_dump_mobile(void)
+int xenon_nandfs_init(void)
 {
 	unsigned short mobi;
-	int i, j, tmp, blk, mobi_blk, mobi_size, mobi_ver, page_each, mmc_anchor_blk;
+	int i, j, tmp, lba, blk, mobi_blk, mobi_size, mobi_ver, page_each, mmc_anchor_blk;
 	int root_off, file_off, ttl_off;
 	int ret = 0;
 	int anchor_num = -1;
@@ -236,6 +208,9 @@ int xenon_nandfs_dump_mobile(void)
 		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.block_sz * 2);
 		mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
 		mobi_ver = 0;
+		
+		for(blk=0;blk<nand.blocks_count;blk++) // Create LBA map
+			dumpdata.lba_map[blk] = blk; // Hail to the phison, just this one time
 		
 		xenon_sfc_readmapdata(blockbuf, (mmc_anchor_blk * nand.block_sz), (nand.block_sz * 2));
 		
@@ -287,9 +262,12 @@ int xenon_nandfs_dump_mobile(void)
 		unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);
 		
 		for(blk=0; blk < nand.blocks_count; blk++)
-		{
+		{	
 			xenon_sfc_readblock_separate(userbuf, sparebuf, blk);
 			meta = (METADATA*)sparebuf;
+		
+			lba = xenon_nandfs_get_lba(meta);
+			dumpdata.lba_map[blk] = lba;
 		
 			for(mobi = 0x30; mobi < 0x3F; mobi++)
 			{
@@ -373,8 +351,7 @@ int xenon_nandfs_dump_mobile(void)
 int xenon_nandfs_init_one(void)
 {
 	xenon_sfc_getnandstruct(&nand);
-	xenon_nandfs_dump_mobile();
-	xenon_nandfs_dump_lba();
+	xenon_nandfs_init();
 
 	return 0;
 }
