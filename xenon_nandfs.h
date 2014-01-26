@@ -110,10 +110,10 @@ typedef struct _FS_ENT{
 
 typedef struct _DUMPDATA{
 	int fsroot_blk[16];
-	int fsroot_v[16];
 	int lba_map[0x1000];
 	int mobile_blocks[MAX_MOBILE];
 	int mobile_size[MAX_MOBILE];
+	int mobile_ver[MAX_MOBILE];
 	FS_ENT* fs_ent;
 } DUMPDATA, *PDUMPDATA;
 
@@ -130,7 +130,7 @@ unsigned int xenon_nandfs_get_mmc_mobileblock(unsigned char* buf, int mobile_num
 unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num);
 int xenon_nandfs_dump_lba(void);
 int xenon_nandfs_check_ecc(PAGEDATA* pdata);
-int xenon_nandfs_find_mobile(int mobi);
+int xenon_nandfs_find_mobile(METADATA* metadata, int mobi);
 int xenon_nandfs_dump_mobile(void);
 int xenon_nandfs_init_one(void);
 
