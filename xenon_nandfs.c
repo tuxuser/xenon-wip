@@ -321,12 +321,35 @@ bool xenon_nandfs_check_ecc(PAGEDATA* pdata)
 	return 1;
 }
 
+u32 xenon_nandfs_extract_fsentry(FS_ENT *entry)
+{
+	u16 block = __builtin_bswap16(entry->startCluster);
+	u32 size = __builtin_bswap32(entry->clusterSz);
+	
+	if(nand.mmc)
+	{
+		u8* blockbuf = (u8 *)vmalloc(nand.block_sz);
+		xenon_sfc_readmapdata(blockbuf, (block * nand.block_sz), nand.block_sz);
+		printf("Header: %c%c%c\n",blockbuf[0],blockbuf[1],blockbuf[2]);
+		vfree(blockbuf);
+	}
+	else
+	{
+		u8* userbuf = (u8 *)vmalloc(nand.block_sz);
+		u8* sparebuf = (u8 *)vmalloc(nand.meta_sz*nand.pages_in_block);
+		xenon_sfc_readblock_separate(userbuf, sparebuf, block);
+		printf("Header: %c%c%c\n",userbuf[0],userbuf[1],userbuf[2]);
+		vfree(userbuf);
+		vfree(sparebuf);
+	}
+}
+
 int xenon_nandfs_parse_fsentries(u8* userbuf)
 {
-	int i, j, root_off, file_off, ttl_off;
-	unsigned char* data = userbuf;
-	unsigned char* fsrootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
-	unsigned char* rootbuf = (unsigned char *)vmalloc(FSROOT_SIZE);
+	u32 i, j, root_off, file_off, ttl_off;
+	u8* data = userbuf;
+	u8* fsrootbuf = (u8 *)vmalloc(FSROOT_SIZE);
+	u8* rootbuf = (u8 *)vmalloc(FSROOT_SIZE);
 	
 	root_off = 0;
 	file_off = 0;
@@ -348,7 +371,10 @@ int xenon_nandfs_parse_fsentries(u8* userbuf)
 		dumpdata.fs_ent= (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
 #ifdef DEBUG
 		if(dumpdata.fs_ent->fileName[0] != 0)
+		{
 			printf("fileName: %s, block: %x, size: %x\n", dumpdata.fs_ent->fileName, __builtin_bswap16(dumpdata.fs_ent->startCluster), __builtin_bswap32(dumpdata.fs_ent->clusterSz));
+			xenon_nandfs_extract_fsentry(dumpdata.fs_ent);
+		}
 #endif
 		dumpdata.fs_ent++;
 	}
