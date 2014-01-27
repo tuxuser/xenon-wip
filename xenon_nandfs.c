@@ -169,8 +169,6 @@ static DUMPDATA dumpdata = {0};
 		xenon_nandfs_init_one();
 		fclose (pFile);
 		
-		printf("ROOTFS at block: %04x, v %i ?\n",dumpdata.fsroot_block, dumpdata.fsroot_v);
-		
 		return 0;
 	}
 
@@ -213,7 +211,7 @@ u16 xenon_nandfs_get_lba(METADATA* meta)
 	}
 }
 
-u32 xenon_nandfs_get_blocktype(METADATA* meta)
+u8 xenon_nandfs_get_blocktype(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
@@ -318,17 +316,6 @@ bool xenon_nandfs_check_ecc(PAGEDATA* pdata)
 	return 1;
 }
 
-u32 xenon_nandfs_find_mobile(METADATA* meta, u8 mobi)
-{
-	u32 ver = 0;
-	if(xenon_nandfs_get_blocktype(meta) == mobi)
-	{
-		ver = xenon_nandfs_get_fssequence(meta);
-		return ver;
-	}
-	return 0;
-}
-
 int xenon_nandfs_parse_fsentries(u8* userbuf)
 {
 	int i, j, root_off, file_off, ttl_off;
@@ -353,7 +340,10 @@ int xenon_nandfs_parse_fsentries(u8* userbuf)
 					
 	for(i=0; i<256; i++)
 	{
-		dumpdata.fs_ent = (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
+		dumpdata.fs_ent= (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
+#ifdef DEBUG
+		printf("fileName: %s\n", dumpdata.fs_ent->fileName);
+#endif
 		dumpdata.fs_ent++;
 	}
 	vfree(fsrootbuf);
@@ -442,25 +432,17 @@ bool xenon_nandfs_init(void)
 			lba = xenon_nandfs_get_lba(meta);
 			dumpdata.lba_map[blk] = lba; // Create LBA map
 		
-			for(mobi = 0x30; mobi < 0x3F; mobi++)
+			for(mobi = MOBILE_BASE; mobi < MOBILE_END; mobi++)
 			{
 				if(xenon_nandfs_get_blocktype(meta) == mobi)
 					tmp_ver = xenon_nandfs_get_fssequence(meta);
-				//else
-				//	continue;
+				else
+					continue;
 				
 				prev_mobi_ver = dumpdata.mobile_ver[mobi-MOBILE_BASE]; // get current version
 				prev_fsroot_ver = dumpdata.fsroot_v; // get current version
 				
-				//if((tmp_ver != 0) && (tmp_ver != 0xFFFFFF))
-				if(blk == 0x38a && mobi == MOBILE_FSROOT)
-				{
-					u32 try;
-					try = xenon_nandfs_get_fssequence(meta);
-					printf("Block: %04x Seq: %04x tmp: %04x mobi: %04x, try: %04x\n",blk, xenon_nandfs_get_fssequence(meta), tmp_ver, mobi, try);
-				}
-				
-				if(tmp_ver > 0)
+				if(tmp_ver >= 0)
 				{
 					if(mobi == MOBILE_FSROOT) // fs root
 					{
@@ -478,6 +460,15 @@ bool xenon_nandfs_init(void)
 					}
 					else
 					{	
+						if(tmp_ver >= prev_mobi_ver)
+						{
+							dumpdata.mobile_ver[mobi-MOBILE_BASE] = tmp_ver; // assign new version number
+							dumpdata.mobile_size[mobi-MOBILE_BASE] = size;
+							dumpdata.mobile_block[mobi-MOBILE_BASE] = blk;
+						}
+						else
+							continue;
+							
 						page_each = nand.pages_in_block - xenon_nandfs_get_fsfreepages(meta);
 						//printf("pageEach: %x\n", pageEach);
 						// find the most recent instance in the block and dump it
@@ -494,15 +485,6 @@ bool xenon_nandfs_init(void)
 					
 						meta = (METADATA*)&sparebuf[j*nand.meta_sz];
 						size = xenon_nandfs_get_fssize(meta);
-						
-						if(tmp_ver >= prev_mobi_ver)
-						{
-							dumpdata.mobile_ver[mobi-MOBILE_BASE] = tmp_ver; // assign new version number
-							dumpdata.mobile_size[mobi-MOBILE_BASE] = size;
-							dumpdata.mobile_block[mobi-MOBILE_BASE] = blk;
-						}
-						else
-							continue;
 						
 						mobileName[6] = mobi+0x11;
 						printk(KERN_INFO "%s found at block 0x%x, page %d, v %i, size %d (0x%x) bytes\n", mobileName, blk, j, tmp_ver, size, size);
