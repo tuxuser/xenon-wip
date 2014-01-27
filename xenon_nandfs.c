@@ -50,16 +50,16 @@ static DUMPDATA dumpdata = {0};
 	u8 fixed_type;
 	FILE * pFile;
 	
-	static inline unsigned short __builtin_bswap16(unsigned short a)
+	static inline u16 __builtin_bswap16(u16 a)
 	{
 	  return (a<<8)|(a>>8);
 	}
 	
-	int xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block)
+	int xenon_sfc_readblock_separate(u8* user, u8* spare, u32 block)
 	{
-		int i;
-		unsigned char* buf = malloc(nand.block_sz_phys);
-		int addr = block * nand.block_sz_phys;
+		u16 i;
+		u8* buf = malloc(nand.block_sz_phys);
+		u32 addr = block * nand.block_sz_phys;
 		//printf("Reading block %04x from addr %08x\n", block, addr);
 		fseek(pFile, addr, SEEK_SET);
 		fread(buf ,nand.block_sz_phys, 1, pFile);
@@ -68,75 +68,72 @@ static DUMPDATA dumpdata = {0};
 			memcpy(&spare[i*nand.meta_sz], &buf[(i*nand.page_sz_phys)+nand.page_sz], nand.meta_sz);
 		}
 	}
-	void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
+	void xenon_sfc_readmapdata(u8* buf, u32 startaddr, u32 total_len)
 	{
 		fseek(pFile, startaddr, SEEK_SET);
 		fread(buf, total_len, 1, pFile);
 	}
 	void xenon_sfc_getnandstruct(xenon_nand* xe_nand)
 	{	
-		// yeah, just ignoring the passed struct and assigning directly
+		xe_nand->pages_in_block = 32;
+		xe_nand->meta_sz = 0x10;
+		xe_nand->page_sz = 0x200;
+		xe_nand->page_sz_phys = nand.page_sz + nand.meta_sz;
 		
-		nand.pages_in_block = 32;
-		nand.meta_sz = 0x10;
-		nand.page_sz = 0x200;
-		nand.page_sz_phys = nand.page_sz + nand.meta_sz;
-		
-		nand.meta_type = META_TYPE_SM;
-		nand.block_sz = 0x4000;
-		nand.block_sz_phys = 0x4200;
-		nand.is_bb = 0;
-		nand.is_bb_cont = 0;
+		xe_nand->meta_type = META_TYPE_SM;
+		xe_nand->block_sz = 0x4000;
+		xe_nand->block_sz_phys = 0x4200;
+		xe_nand->is_bb = false;
+		xe_nand->is_bb_cont = false;
 		
 		switch(fixed_type)
 		{
 			case META_TYPE_SM:
-					nand.size_dump = 0x1080000;
-					nand.size_data = 0x1000000;
-					nand.size_spare = 0x80000;
-					nand.size_usable_fs = 0x3E0;
+					xe_nand->size_dump = 0x1080000;
+					xe_nand->size_data = 0x1000000;
+					xe_nand->size_spare = 0x80000;
+					xe_nand->size_usable_fs = 0x3E0;
 				break;
 			case META_TYPE_BOS:
-					nand.meta_type = META_TYPE_BOS;
-					nand.is_bb_cont = 1;
-					nand.size_dump = 0x1080000;
-					nand.size_data = 0x1000000;
-					nand.size_spare = 0x80000;
-					nand.size_usable_fs = 0x3E0;
+					xe_nand->meta_type = META_TYPE_BOS;
+					xe_nand->is_bb_cont = true;
+					xe_nand->size_dump = 0x1080000;
+					xe_nand->size_data = 0x1000000;
+					xe_nand->size_spare = 0x80000;
+					xe_nand->size_usable_fs = 0x3E0;
 				break;
 			case META_TYPE_BG:
-					nand.meta_type = META_TYPE_BG;
-					nand.is_bb_cont = 1;
-					nand.is_bb = 1;
-					nand.size_dump = 0x4200000;
-					nand.block_sz_phys = 0x21000;
-					nand.size_data = 0x4000000;
-					nand.size_spare = 0x200000;
-					nand.pages_in_block = 256;
-					nand.block_sz = 0x20000;
-					nand.size_usable_fs = 0x1E0;
+					xe_nand->meta_type = META_TYPE_BG;
+					xe_nand->is_bb_cont = true;
+					xe_nand->is_bb = true;
+					xe_nand->size_dump = 0x4200000;
+					xe_nand->block_sz_phys = 0x21000;
+					xe_nand->size_data = 0x4000000;
+					xe_nand->size_spare = 0x200000;
+					xe_nand->pages_in_block = 256;
+					xe_nand->block_sz = 0x20000;
+					xe_nand->size_usable_fs = 0x1E0;
 				break;
 			case META_TYPE_NONE:
-				nand.meta_type = META_TYPE_NONE;
-				nand.block_sz = 0x4000;
-				nand.block_sz_phys = 0x20000;
-				nand.meta_sz = 0;
+				xe_nand->meta_type = META_TYPE_NONE;
+				xe_nand->block_sz = 0x4000;
+				xe_nand->block_sz_phys = 0x20000;
+				xe_nand->meta_sz = 0;
 			
-				nand.size_dump = 0x3000000;
-				nand.size_data = 0x3000000;
-				nand.size_spare = 0;
-				nand.size_usable_fs = 0xC00; // (nand.size_dump/nand.block_sz)
+				xe_nand->size_dump = 0x3000000;
+				xe_nand->size_data = 0x3000000;
+				xe_nand->size_spare = 0;
+				xe_nand->size_usable_fs = 0xC00; // (nand.size_dump/nand.block_sz)
 				break;
 				
 		}
-		nand.config_block = nand.size_usable_fs - CONFIG_BLOCKS;
-		nand.blocks_count = nand.size_dump / nand.block_sz_phys;
-		nand.pages_count = nand.blocks_count * nand.pages_in_block;
+		xe_nand->config_block = xe_nand->size_usable_fs - CONFIG_BLOCKS;
+		xe_nand->blocks_count = xe_nand->size_dump / xe_nand->block_sz_phys;
+		xe_nand->pages_count = xe_nand->blocks_count * xe_nand->pages_in_block;
 	}
 	
 	int main(int argc, char *argv[])
 	{
-		int ret;
 		if(argc != 3)
 		{
 			printf("Usage: %s nandtype dump_filename.bin\n", argv[0]);
@@ -162,8 +159,6 @@ static DUMPDATA dumpdata = {0};
 			return 2;
 		}
 		
-		xenon_sfc_getnandstruct(&nand);
-		
 		pFile = fopen(argv[2],"rb");
 		if (pFile==NULL)
 		{
@@ -171,16 +166,19 @@ static DUMPDATA dumpdata = {0};
 			return 4;
 		}
 		
-		xenon_nandfs_init();
+		xenon_nandfs_init_one();
 		fclose (pFile);
+		
+		printf("ROOTFS at block: %04x, v %i ?\n",dumpdata.fsroot_block, dumpdata.fsroot_v);
+		
 		return 0;
 	}
 
 #endif
 
 void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
-	unsigned int i=0, val=0;
-	unsigned int v=0;
+	u32 i=0, val=0;
+	u32 v=0;
 
 	for (i = 0; i < 0x1066; i++)
 	{
@@ -202,7 +200,7 @@ void xenon_nandfs_calcecc(unsigned int *data, unsigned char* edc) {
 	edc[3] = (val >> 18) & 0xFF;
 }
 
-int xenon_nandfs_get_lba(METADATA* meta)
+u16 xenon_nandfs_get_lba(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
@@ -213,24 +211,22 @@ int xenon_nandfs_get_lba(METADATA* meta)
 		case META_TYPE_BG:
 			return (((meta->bg.BlockID0&0xF)<<8)+(meta->bg.BlockID1&0xFF));
 	}
-	return INVALID;
 }
 
-int xenon_nandfs_get_blocktype(METADATA* meta)
+u32 xenon_nandfs_get_blocktype(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta->sm.FsBlockType;
+			return (meta->sm.FsBlockType&0x3F);
 		case META_TYPE_BOS:
-			return meta->bos.FsBlockType;
+			return (meta->bos.FsBlockType&0x3F);
 		case META_TYPE_BG:
-			return meta->bg.FsBlockType;
+			return (meta->bg.FsBlockType&0x3F);
 	}
-	return INVALID;
 }
 
-int xenon_nandfs_get_badblock_mark(METADATA* meta)
+u8 xenon_nandfs_get_badblock_mark(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
@@ -241,10 +237,9 @@ int xenon_nandfs_get_badblock_mark(METADATA* meta)
 		case META_TYPE_BG:
 			return meta->bg.BadBlock;
 	}
-	return INVALID;
 }
 
-int xenon_nandfs_get_fssize(METADATA* meta)
+u32 xenon_nandfs_get_fssize(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
@@ -255,10 +250,9 @@ int xenon_nandfs_get_fssize(METADATA* meta)
 		case META_TYPE_BG:
 			return (((meta->bg.FsSize0&0xFF)<<8)+(meta->bg.FsSize1&0xFF));
 	}
-	return INVALID;
 }
 
-int xenon_nandfs_get_fsfreepages(METADATA* meta)
+u32 xenon_nandfs_get_fsfreepages(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
@@ -269,55 +263,53 @@ int xenon_nandfs_get_fsfreepages(METADATA* meta)
 		case META_TYPE_BG:
 			return (meta->bg.FsPageCount * 4);
 	}
-	return INVALID;
 }
 
-int xenon_nandfs_get_fssequence(METADATA* meta)
+u32 xenon_nandfs_get_fssequence(METADATA* meta)
 {
 	switch (nand.meta_type)
 	{
 		case META_TYPE_SM:
-			return meta->sm.FsSequence0+(meta->sm.FsSequence1<<8)+(meta->sm.FsSequence2<<16);
+			return (meta->sm.FsSequence0+(meta->sm.FsSequence1<<8)+(meta->sm.FsSequence2<<16));
 		case META_TYPE_BOS:
-			return meta->bos.FsSequence0+(meta->bos.FsSequence1<<8)+(meta->bos.FsSequence2<<16);
+			return (meta->bos.FsSequence0+(meta->bos.FsSequence1<<8)+(meta->bos.FsSequence2<<16));
 		case META_TYPE_BG:
-			return meta->bg.FsSequence0+(meta->bg.FsSequence1<<8)+(meta->bg.FsSequence2<<16);
+			return (meta->bg.FsSequence0+(meta->bg.FsSequence1<<8)+(meta->bg.FsSequence2<<16));
 	}
-	return INVALID;
 }
 
-unsigned int xenon_nandfs_check_mmc_anchor_sha(unsigned char* buf)
+bool xenon_nandfs_check_mmc_anchor_sha(unsigned char* buf)
 {
 	//unsigned char* data = buf;
 	//CryptSha(&data[MMC_ANCHOR_HASH_LEN], (0x200-MMC_ANCHOR_HASH_LEN), NULL, 0, NULL, 0, sha, MMC_ANCHOR_HASH_LEN);
 	return 0;
 }
 
-unsigned int xenon_nandfs_get_mmc_anchor_ver(unsigned char* buf)
+u32 xenon_nandfs_get_mmc_anchor_ver(u8* buf)
 {
-	unsigned char* data = buf;
+	u8* data = buf;
 	return __builtin_bswap32(data[MMC_ANCHOR_VERSION_POS]);
 }
 
-unsigned int xenon_nandfs_get_mmc_mobileblock(unsigned char* buf, int mobile_num)
+u16 xenon_nandfs_get_mmc_mobileblock(u8* buf, u8 mobi)
 {
-	unsigned char* data = buf;
-	int mob = mobile_num - MOBILE_BASE;
-	int offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE);
+	u8* data = buf;
+	u8 mob = mobi - MOBILE_BASE;
+	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE);
 	
 	return __builtin_bswap16(data[offset]);
 }
 
-unsigned int xenon_nandfs_get_mmc_mobilesize(unsigned char* buf, int mobile_num)
+u16 xenon_nandfs_get_mmc_mobilesize(u8* buf, u8 mobi)
 {
-	unsigned char* data = buf;
-	int mob = mobile_num - MOBILE_BASE;
-	int offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x4;
+	u8* data = buf;
+	u8 mob = mobi - MOBILE_BASE;
+	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x4;
 	
 	return __builtin_bswap16(data[offset]);
 }
 
-int xenon_nandfs_check_ecc(PAGEDATA* pdata)
+bool xenon_nandfs_check_ecc(PAGEDATA* pdata)
 {
 	unsigned char ecd[4];
 	xenon_nandfs_calcecc((unsigned int*)pdata->user, ecd);
@@ -326,20 +318,20 @@ int xenon_nandfs_check_ecc(PAGEDATA* pdata)
 	return 1;
 }
 
-int xenon_nandfs_find_mobile(METADATA* metadata, int mobi)
+u32 xenon_nandfs_find_mobile(METADATA* metadata, u8 mobi)
 {
-	unsigned int ver = 0;
+	u32 ver = 0;
 	METADATA* meta = metadata;
 
-	if((xenon_nandfs_get_blocktype(meta)&0x3F) == mobi)
+	if(xenon_nandfs_get_blocktype(meta) == mobi)
 	{
 		ver = xenon_nandfs_get_fssequence(meta);
 		return ver;
 	}
-	return -1;
+	return 0;
 }
 
-int xenon_nandfs_parse_fsentries(unsigned char* userbuf)
+int xenon_nandfs_parse_fsentries(u8* userbuf)
 {
 	int i, j, root_off, file_off, ttl_off;
 	unsigned char* data = userbuf;
@@ -371,21 +363,21 @@ int xenon_nandfs_parse_fsentries(unsigned char* userbuf)
 	return 0;
 }
 
-int xenon_nandfs_init(void)
+bool xenon_nandfs_init(void)
 {
-	unsigned short mobi;
-	int i, j, tmp, lba, blk, mobi_blk, mobi_size, mobi_ver, page_each, mmc_anchor_blk;
-	int ret = 0;
-	int anchor_num = -1;
+	u8 mobi;
+	u32 i, j, mmc_anchor_blk, prev_mobi_ver, prev_fsroot_ver, tmp_ver, lba, blk, size, page_each;
+	bool ret = false;
+	u8 anchor_num = 0;
 	char mobileName[] = {"MobileA"};
 	METADATA* meta;
 
 	if(nand.mmc)
 	{
-		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.block_sz * 2);
-		unsigned char* fsrootbuf = (unsigned char *)vmalloc(nand.block_sz);
+		u8* blockbuf = (u8 *)vmalloc(nand.block_sz * 2);
+		u8* fsrootbuf = (u8 *)vmalloc(nand.block_sz);
 		mmc_anchor_blk = nand.config_block - MMC_ANCHOR_BLOCKS;
-		mobi_ver = 0;
+		prev_mobi_ver = 0;
 		
 		for(blk=0;blk<nand.blocks_count;blk++) // Create LBA map
 			dumpdata.lba_map[blk] = blk; // Hail to the phison, just this one time
@@ -394,85 +386,89 @@ int xenon_nandfs_init(void)
 		
 		for(i=0; i < MMC_ANCHOR_BLOCKS; i++)
 		{
-			tmp = xenon_nandfs_get_mmc_anchor_ver(&blockbuf[i*nand.block_sz]);
-			if(tmp >= mobi_ver) 
+			tmp_ver = xenon_nandfs_get_mmc_anchor_ver(&blockbuf[i*nand.block_sz]);
+			if(tmp_ver >= prev_mobi_ver) 
 			{
-				mobi_ver = tmp;
+				prev_mobi_ver = tmp_ver;
 				anchor_num = i;
 			}
 		}
 		
-		if(anchor_num == -1)
+/*		if(anchor_num == 0)
 		{
 			printk(KERN_INFO "MMC Anchor block wasn't found!");
 			vfree(blockbuf);
-			return 0;
+			return false;
 		}
+*/
 
 		for(mobi = 0x30; mobi < 0x3F; mobi++)
 		{
-			mobi_blk = xenon_nandfs_get_mmc_mobileblock(&blockbuf[anchor_num*nand.block_sz], mobi);
-			mobi_size = xenon_nandfs_get_mmc_mobilesize(&blockbuf[anchor_num*nand.block_sz], mobi);
-			mobi_size *= nand.block_sz;
-			mobi_blk *= nand.block_sz;
-			
-			if(mobi_blk == 0)
+			blk = xenon_nandfs_get_mmc_mobileblock(&blockbuf[anchor_num*nand.block_sz], mobi);
+			size = xenon_nandfs_get_mmc_mobilesize(&blockbuf[anchor_num*nand.block_sz], mobi);
+
+			if(blk == 0)
 				continue;
 
 			if(mobi == MOBILE_FSROOT)
 			{
-				printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobi_blk, mobi_ver, nand.block_sz, nand.block_sz);
-				xenon_sfc_readmapdata(fsrootbuf, mobi_blk, nand.block_sz);
+				printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", blk, prev_mobi_ver, nand.block_sz, nand.block_sz);
+				xenon_sfc_readmapdata(fsrootbuf, blk, nand.block_sz);
 				xenon_nandfs_parse_fsentries(fsrootbuf);
-				ret  = 1;
+				dumpdata.fsroot_block = blk;
+				dumpdata.fsroot_v = prev_mobi_ver; // anchor version
+				ret  = true;
 			}
 			else
 			{
 				mobileName[6] = mobi+0x11;
-				printk(KERN_INFO "%s found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobileName, mobi_blk, mobi_ver, mobi_size, mobi_size);	
+				printk(KERN_INFO "%s found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobileName, blk, prev_mobi_ver, size, size);
+				dumpdata.mobile_block[mobi-MOBILE_BASE] = blk;
+				dumpdata.mobile_size[mobi-MOBILE_BASE] = size;
+				dumpdata.mobile_ver[mobi-MOBILE_BASE] = prev_mobi_ver; // anchor version
 			}
-			dumpdata.mobile_blocks[mobi-MOBILE_BASE] = mobi_blk;
-			dumpdata.mobile_size[mobi-MOBILE_BASE] = mobi_size;
-			dumpdata.mobile_ver[mobi-MOBILE_BASE] = mobi_ver; // actually the anchor version	
 		}
 		vfree(blockbuf);
 		vfree(fsrootbuf);
 	}
 	else
 	{
-		unsigned char* userbuf = (unsigned char *)vmalloc(nand.block_sz);
-		unsigned char* sparebuf = (unsigned char *)vmalloc(nand.meta_sz*nand.pages_in_block);
+		u8* userbuf = (u8 *)vmalloc(nand.block_sz);
+		u8* sparebuf = (u8 *)vmalloc(nand.meta_sz*nand.pages_in_block);
 		
 		for(blk=0; blk < nand.blocks_count; blk++)
-		{	
+		{
 			xenon_sfc_readblock_separate(userbuf, sparebuf, blk);
 			meta = (METADATA*)sparebuf;
-		
+
 			lba = xenon_nandfs_get_lba(meta);
 			dumpdata.lba_map[blk] = lba; // Create LBA map
 		
 			for(mobi = 0x30; mobi < 0x3F; mobi++)
 			{
-				tmp = xenon_nandfs_find_mobile(meta, mobi);
-				if(tmp == -1)
-					continue; // not the mobile we are looking for
-					
-				mobi_ver = dumpdata.mobile_ver[mobi-MOBILE_BASE]; // version per mobile
-				mobi_blk = blk;
+				tmp_ver = xenon_nandfs_find_mobile(meta, mobi);	
 				
-				if((mobi_blk != 0) && (tmp > mobi_ver))
-				{	
-					mobi_ver = tmp;
-					
+				prev_mobi_ver = dumpdata.mobile_ver[mobi-MOBILE_BASE]; // get current version
+				prev_fsroot_ver = dumpdata.fsroot_v; // get current version
+				
+				if(tmp_ver > 0)
+				{
 					if(mobi == MOBILE_FSROOT) // fs root
 					{
-						printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobi_blk, mobi_ver, nand.block_sz, nand.block_sz);
+						if(tmp_ver >= prev_fsroot_ver) 
+						{
+							dumpdata.fsroot_v = tmp_ver; // assign new version number
+							dumpdata.fsroot_block = blk;
+						}	
+						else
+							continue;
+						
+						printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", blk, dumpdata.fsroot_v, nand.block_sz, nand.block_sz);
 						xenon_nandfs_parse_fsentries(userbuf);
-						mobi_size = 0;
-						ret = 1;
+						ret = true;
 					}
 					else
-					{
+					{	
 						page_each = nand.pages_in_block - xenon_nandfs_get_fsfreepages(meta);
 						//printf("pageEach: %x\n", pageEach);
 						// find the most recent instance in the block and dump it
@@ -488,14 +484,20 @@ int xenon_nandfs_init(void)
 						}
 					
 						meta = (METADATA*)&sparebuf[j*nand.meta_sz];
-						mobi_size = xenon_nandfs_get_fssize(meta);
-					
+						size = xenon_nandfs_get_fssize(meta);
+						
+						if(tmp_ver >= prev_mobi_ver)
+						{
+							dumpdata.mobile_ver[mobi-MOBILE_BASE] = tmp_ver; // assign new version number
+							dumpdata.mobile_size[mobi-MOBILE_BASE] = size;
+							dumpdata.mobile_block[mobi-MOBILE_BASE] = blk;
+						}
+						else
+							continue;
+						
 						mobileName[6] = mobi+0x11;
-						printk(KERN_INFO "%s found at block 0x%x, page %d, v %i, size %d (0x%x) bytes\n", mobileName, mobi_blk, j, mobi_ver, mobi_size, mobi_size);
+						printk(KERN_INFO "%s found at block 0x%x, page %d, v %i, size %d (0x%x) bytes\n", mobileName, blk, j, tmp_ver, size, size);
 					}
-					dumpdata.mobile_blocks[mobi-MOBILE_BASE] = mobi_blk;
-					dumpdata.mobile_size[mobi-MOBILE_BASE] = mobi_size;
-					dumpdata.mobile_ver[mobi-MOBILE_BASE] = mobi_ver;
 				}
 			}
 		}
@@ -505,10 +507,9 @@ int xenon_nandfs_init(void)
 	return ret;
 }
 
-int xenon_nandfs_init_one(void)
+bool xenon_nandfs_init_one(void)
 {
 	xenon_sfc_getnandstruct(&nand);
 	xenon_nandfs_init();
-
-	return 0;
+	return true;
 }
