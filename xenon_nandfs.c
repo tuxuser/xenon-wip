@@ -25,20 +25,19 @@
 
 #ifdef DEBUG
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#define vmalloc malloc
-#define vfree free
-#define printk printf 
-#define KERN_INFO
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#define vmalloc malloc
+	#define vfree free
+	#define printk printf 
+	#define KERN_INFO
 
 #else
 
-#include <linux/vmalloc.h>
+	#include <linux/vmalloc.h>
 
 #endif
-
 
 #include "xenon_sfc.h"
 #include "xenon_nandfs.h"
@@ -48,134 +47,134 @@ static DUMPDATA dumpdata = {0};
 
 #ifdef DEBUG
 
-int fixed_type;
-FILE * pFile;
-
-static inline unsigned short __builtin_bswap16(unsigned short a)
-{
-  return (a<<8)|(a>>8);
-}
-
-int xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block)
-{
-	int i;
-	unsigned char* buf = malloc(nand.block_sz_phys);
-	int addr = block * nand.block_sz_phys;
-	//printf("Reading block %04x from addr %08x\n", block, addr);
-	fseek(pFile, addr, SEEK_SET);
-	fread(buf ,nand.block_sz_phys, 1, pFile);
-	for(i=0;i<nand.pages_in_block; i++){
-		memcpy(&user[i*nand.page_sz], &buf[i*nand.page_sz_phys], nand.page_sz);
-		memcpy(&spare[i*nand.meta_sz], &buf[(i*nand.page_sz_phys)+nand.page_sz], nand.meta_sz);
-	}
-}
-void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
-{
-	fseek(pFile, startaddr, SEEK_SET);
-	fread(buf, total_len, 1, pFile);
-}
-void xenon_sfc_getnandstruct(xenon_nand* xe_nand)
-{	
-	// yeah, just ignoring the passed struct and assigning directly
+	u8 fixed_type;
+	FILE * pFile;
 	
-	nand.pages_in_block = 32;
-	nand.meta_sz = 0x10;
-	nand.page_sz = 0x200;
-	nand.page_sz_phys = nand.page_sz + nand.meta_sz;
-	
-	nand.meta_type = META_TYPE_SM;
-	nand.block_sz = 0x4000;
-	nand.block_sz_phys = 0x4200;
-	nand.is_bb = 0;
-	nand.is_bb_cont = 0;
-	
-	switch(fixed_type)
+	static inline unsigned short __builtin_bswap16(unsigned short a)
 	{
-		case META_TYPE_SM:
-				nand.size_dump = 0x1080000;
-				nand.size_data = 0x1000000;
-				nand.size_spare = 0x80000;
-				nand.size_usable_fs = 0x3E0;
-			break;
-		case META_TYPE_BOS:
-				nand.meta_type = META_TYPE_BOS;
-				nand.is_bb_cont = 1;
-				nand.size_dump = 0x1080000;
-				nand.size_data = 0x1000000;
-				nand.size_spare = 0x80000;
-				nand.size_usable_fs = 0x3E0;
-			break;
-		case META_TYPE_BG:
-				nand.meta_type = META_TYPE_BG;
-				nand.is_bb_cont = 1;
-				nand.is_bb = 1;
-				nand.size_dump = 0x4200000;
-				nand.block_sz_phys = 0x21000;
-				nand.size_data = 0x4000000;
-				nand.size_spare = 0x200000;
-				nand.pages_in_block = 256;
-				nand.block_sz = 0x20000;
-				nand.size_usable_fs = 0x1E0;
-			break;
-		case META_TYPE_NONE:
-			nand.meta_type = META_TYPE_NONE;
-			nand.block_sz = 0x4000;
-			nand.block_sz_phys = 0x20000;
-			nand.meta_sz = 0;
+	  return (a<<8)|(a>>8);
+	}
+	
+	int xenon_sfc_readblock_separate(unsigned char* user, unsigned char* spare, int block)
+	{
+		int i;
+		unsigned char* buf = malloc(nand.block_sz_phys);
+		int addr = block * nand.block_sz_phys;
+		//printf("Reading block %04x from addr %08x\n", block, addr);
+		fseek(pFile, addr, SEEK_SET);
+		fread(buf ,nand.block_sz_phys, 1, pFile);
+		for(i=0;i<nand.pages_in_block; i++){
+			memcpy(&user[i*nand.page_sz], &buf[i*nand.page_sz_phys], nand.page_sz);
+			memcpy(&spare[i*nand.meta_sz], &buf[(i*nand.page_sz_phys)+nand.page_sz], nand.meta_sz);
+		}
+	}
+	void xenon_sfc_readmapdata(unsigned char* buf, int startaddr, int total_len)
+	{
+		fseek(pFile, startaddr, SEEK_SET);
+		fread(buf, total_len, 1, pFile);
+	}
+	void xenon_sfc_getnandstruct(xenon_nand* xe_nand)
+	{	
+		// yeah, just ignoring the passed struct and assigning directly
 		
-			nand.size_dump = 0x3000000;
-			nand.size_data = 0x3000000;
-			nand.size_spare = 0;
-			nand.size_usable_fs = 0xC00; // (nand.size_dump/nand.block_sz)
-			break;
+		nand.pages_in_block = 32;
+		nand.meta_sz = 0x10;
+		nand.page_sz = 0x200;
+		nand.page_sz_phys = nand.page_sz + nand.meta_sz;
+		
+		nand.meta_type = META_TYPE_SM;
+		nand.block_sz = 0x4000;
+		nand.block_sz_phys = 0x4200;
+		nand.is_bb = 0;
+		nand.is_bb_cont = 0;
+		
+		switch(fixed_type)
+		{
+			case META_TYPE_SM:
+					nand.size_dump = 0x1080000;
+					nand.size_data = 0x1000000;
+					nand.size_spare = 0x80000;
+					nand.size_usable_fs = 0x3E0;
+				break;
+			case META_TYPE_BOS:
+					nand.meta_type = META_TYPE_BOS;
+					nand.is_bb_cont = 1;
+					nand.size_dump = 0x1080000;
+					nand.size_data = 0x1000000;
+					nand.size_spare = 0x80000;
+					nand.size_usable_fs = 0x3E0;
+				break;
+			case META_TYPE_BG:
+					nand.meta_type = META_TYPE_BG;
+					nand.is_bb_cont = 1;
+					nand.is_bb = 1;
+					nand.size_dump = 0x4200000;
+					nand.block_sz_phys = 0x21000;
+					nand.size_data = 0x4000000;
+					nand.size_spare = 0x200000;
+					nand.pages_in_block = 256;
+					nand.block_sz = 0x20000;
+					nand.size_usable_fs = 0x1E0;
+				break;
+			case META_TYPE_NONE:
+				nand.meta_type = META_TYPE_NONE;
+				nand.block_sz = 0x4000;
+				nand.block_sz_phys = 0x20000;
+				nand.meta_sz = 0;
 			
+				nand.size_dump = 0x3000000;
+				nand.size_data = 0x3000000;
+				nand.size_spare = 0;
+				nand.size_usable_fs = 0xC00; // (nand.size_dump/nand.block_sz)
+				break;
+				
+		}
+		nand.config_block = nand.size_usable_fs - CONFIG_BLOCKS;
+		nand.blocks_count = nand.size_dump / nand.block_sz_phys;
+		nand.pages_count = nand.blocks_count * nand.pages_in_block;
 	}
-	nand.config_block = nand.size_usable_fs - CONFIG_BLOCKS;
-	nand.blocks_count = nand.size_dump / nand.block_sz_phys;
-	nand.pages_count = nand.blocks_count * nand.pages_in_block;
-}
-
-int main(int argc, char *argv[])
-{
-	int ret;
-	if(argc != 3)
+	
+	int main(int argc, char *argv[])
 	{
-		printf("Usage: %s nandtype dump_filename.bin\n", argv[0]);
-		printf("Valid nandtypes:\n\n");
-		printf("sm - Small Block (Xenon, Zephyr, Falcon, some Jasper 16MB)\n");
-		printf("bos - Big on Small Block (some Jasper 16MB)\n");
-		printf("bg - Big Block (Jasper 256/512MB\n");
-		printf("mmc - eMMC NAND (Corona)\n");
-		return 1;
+		int ret;
+		if(argc != 3)
+		{
+			printf("Usage: %s nandtype dump_filename.bin\n", argv[0]);
+			printf("Valid nandtypes:\n\n");
+			printf("sm - Small Block (Xenon, Zephyr, Falcon, some Jasper 16MB)\n");
+			printf("bos - Big on Small Block (some Jasper 16MB)\n");
+			printf("bg - Big Block (Jasper 256/512MB\n");
+			printf("mmc - eMMC NAND (Corona)\n");
+			return 1;
+		}
+		
+		if(!strcmp(argv[1],"sm"))
+			fixed_type = META_TYPE_SM;
+		else if(!strcmp(argv[1],"bos"))
+			fixed_type = META_TYPE_BOS;
+		else if(!strcmp(argv[1],"bg"))
+			fixed_type = META_TYPE_BG;
+		else if(!strcmp(argv[1],"mmc"))
+			fixed_type = META_TYPE_NONE;
+		else
+		{
+			printf("Unsupported meta-type: %s\n", argv[1]);
+			return 2;
+		}
+		
+		xenon_sfc_getnandstruct(&nand);
+		
+		pFile = fopen(argv[2],"rb");
+		if (pFile==NULL)
+		{
+			printf("Failed opening \'%s\'!!!\n", argv[2]);
+			return 4;
+		}
+		
+		xenon_nandfs_init();
+		fclose (pFile);
+		return 0;
 	}
-	
-	if(!strcmp(argv[1],"sm"))
-		fixed_type = META_TYPE_SM;
-	else if(!strcmp(argv[1],"bos"))
-		fixed_type = META_TYPE_BOS;
-	else if(!strcmp(argv[1],"bg"))
-		fixed_type = META_TYPE_BG;
-	else if(!strcmp(argv[1],"mmc"))
-		fixed_type = META_TYPE_NONE;
-	else
-	{
-		printf("Unsupported meta-type: %s\n", argv[1]);
-		return 2;
-	}
-	
-	xenon_sfc_getnandstruct(&nand);
-	
-	pFile = fopen(argv[2],"rb");
-	if (pFile==NULL)
-	{
-		printf("Failed opening \'%s\'!!!\n", argv[2]);
-		return 4;
-	}
-	
-	xenon_nandfs_init();
-	fclose (pFile);
-	return 0;
-}
 
 #endif
 

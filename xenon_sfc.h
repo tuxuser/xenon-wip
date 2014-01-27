@@ -1,6 +1,8 @@
 #ifndef _XENON_SFC_H
 #define _XENON_SFC_H
 
+#include <stdbool.h>
+
 //Registers
 #define SFCX_CONFIG				(0x00)
 #define SFCX_STATUS 			(0x04)
@@ -89,11 +91,24 @@
 // define success as no ecc error and no bad block error
 #define SFCX_SUCCESS(status) ((status&STATUS_ERROR)==0)
 
+
+typedef signed char s8;
+typedef unsigned char u8;
+
+typedef signed short s16;
+typedef unsigned short u16;
+
+typedef signed int s32;
+typedef unsigned int u32;
+
+typedef signed long s64;
+typedef unsigned long u64;
+
 typedef struct _xenon_nand
 {
-	int is_bb_cont;
-	int is_bb;
-	int mmc;
+	bool is_bb_cont;
+	bool is_bb;
+	bool mmc;
 	int meta_type;
 
 	int page_sz;
