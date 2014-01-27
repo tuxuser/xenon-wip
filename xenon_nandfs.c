@@ -318,11 +318,9 @@ bool xenon_nandfs_check_ecc(PAGEDATA* pdata)
 	return 1;
 }
 
-u32 xenon_nandfs_find_mobile(METADATA* metadata, u8 mobi)
+u32 xenon_nandfs_find_mobile(METADATA* meta, u8 mobi)
 {
 	u32 ver = 0;
-	METADATA* meta = metadata;
-
 	if(xenon_nandfs_get_blocktype(meta) == mobi)
 	{
 		ver = xenon_nandfs_get_fssequence(meta);
@@ -446,10 +444,21 @@ bool xenon_nandfs_init(void)
 		
 			for(mobi = 0x30; mobi < 0x3F; mobi++)
 			{
-				tmp_ver = xenon_nandfs_find_mobile(meta, mobi);	
+				if(xenon_nandfs_get_blocktype(meta) == mobi)
+					tmp_ver = xenon_nandfs_get_fssequence(meta);
+				//else
+				//	continue;
 				
 				prev_mobi_ver = dumpdata.mobile_ver[mobi-MOBILE_BASE]; // get current version
 				prev_fsroot_ver = dumpdata.fsroot_v; // get current version
+				
+				//if((tmp_ver != 0) && (tmp_ver != 0xFFFFFF))
+				if(blk == 0x38a && mobi == MOBILE_FSROOT)
+				{
+					u32 try;
+					try = xenon_nandfs_get_fssequence(meta);
+					printf("Block: %04x Seq: %04x tmp: %04x mobi: %04x, try: %04x\n",blk, xenon_nandfs_get_fssequence(meta), tmp_ver, mobi, try);
+				}
 				
 				if(tmp_ver > 0)
 				{
