@@ -115,6 +115,7 @@ static DUMPDATA dumpdata = {0};
 					xe_nand->size_usable_fs = 0x1E0;
 				break;
 			case META_TYPE_NONE:
+				xe_nand->mmc = true;
 				xe_nand->meta_type = META_TYPE_NONE;
 				xe_nand->block_sz = 0x4000;
 				xe_nand->block_sz_phys = 0x20000;
@@ -283,10 +284,12 @@ bool xenon_nandfs_check_mmc_anchor_sha(unsigned char* buf)
 	return 0;
 }
 
-u32 xenon_nandfs_get_mmc_anchor_ver(u8* buf)
+u16 xenon_nandfs_get_mmc_anchor_ver(u8* buf)
 {
 	u8* data = buf;
-	return __builtin_bswap32(data[MMC_ANCHOR_VERSION_POS]);
+	u16 tmp = (data[MMC_ANCHOR_VERSION_POS]<<8|data[MMC_ANCHOR_VERSION_POS+1]);
+
+	return tmp;
 }
 
 u16 xenon_nandfs_get_mmc_mobileblock(u8* buf, u8 mobi)
@@ -294,17 +297,19 @@ u16 xenon_nandfs_get_mmc_mobileblock(u8* buf, u8 mobi)
 	u8* data = buf;
 	u8 mob = mobi - MOBILE_BASE;
 	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE);
+	u16 tmp = data[offset]<<8|data[offset+1];
 	
-	return __builtin_bswap16(data[offset]);
+	return tmp;
 }
 
 u16 xenon_nandfs_get_mmc_mobilesize(u8* buf, u8 mobi)
 {
 	u8* data = buf;
 	u8 mob = mobi - MOBILE_BASE;
-	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x4;
+	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x2;
+	u16 tmp = data[offset]<<8|data[offset+1];
 	
-	return __builtin_bswap16(data[offset]);
+	return __builtin_bswap16(tmp);
 }
 
 bool xenon_nandfs_check_ecc(PAGEDATA* pdata)
@@ -342,7 +347,8 @@ int xenon_nandfs_parse_fsentries(u8* userbuf)
 	{
 		dumpdata.fs_ent= (FS_ENT*)&fsrootbuf[i*sizeof(FS_ENT)];
 #ifdef DEBUG
-		printf("fileName: %s\n", dumpdata.fs_ent->fileName);
+		if(dumpdata.fs_ent->fileName[0] != 0)
+			printf("fileName: %s, block: %x, size: %x\n", dumpdata.fs_ent->fileName, __builtin_bswap16(dumpdata.fs_ent->startCluster), __builtin_bswap32(dumpdata.fs_ent->clusterSz));
 #endif
 		dumpdata.fs_ent++;
 	}
@@ -382,13 +388,13 @@ bool xenon_nandfs_init(void)
 			}
 		}
 		
-/*		if(anchor_num == 0)
+		if(prev_mobi_ver == 0)
 		{
 			printk(KERN_INFO "MMC Anchor block wasn't found!");
 			vfree(blockbuf);
 			return false;
 		}
-*/
+
 
 		for(mobi = 0x30; mobi < 0x3F; mobi++)
 		{
@@ -401,7 +407,7 @@ bool xenon_nandfs_init(void)
 			if(mobi == MOBILE_FSROOT)
 			{
 				printk(KERN_INFO "FSRoot found at block 0x%x, v %i, size %d (0x%x) bytes\n", blk, prev_mobi_ver, nand.block_sz, nand.block_sz);
-				xenon_sfc_readmapdata(fsrootbuf, blk, nand.block_sz);
+				xenon_sfc_readmapdata(fsrootbuf, blk*nand.block_sz, nand.block_sz);
 				xenon_nandfs_parse_fsentries(fsrootbuf);
 				dumpdata.fsroot_block = blk;
 				dumpdata.fsroot_v = prev_mobi_ver; // anchor version
@@ -410,9 +416,9 @@ bool xenon_nandfs_init(void)
 			else
 			{
 				mobileName[6] = mobi+0x11;
-				printk(KERN_INFO "%s found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobileName, blk, prev_mobi_ver, size, size);
+				printk(KERN_INFO "%s found at block 0x%x, v %i, size %d (0x%x) bytes\n", mobileName, blk, prev_mobi_ver, size*nand.block_sz, size*nand.block_sz);
 				dumpdata.mobile_block[mobi-MOBILE_BASE] = blk;
-				dumpdata.mobile_size[mobi-MOBILE_BASE] = size;
+				dumpdata.mobile_size[mobi-MOBILE_BASE] = size * nand.block_sz;
 				dumpdata.mobile_ver[mobi-MOBILE_BASE] = prev_mobi_ver; // anchor version
 			}
 		}
@@ -432,7 +438,7 @@ bool xenon_nandfs_init(void)
 			lba = xenon_nandfs_get_lba(meta);
 			dumpdata.lba_map[blk] = lba; // Create LBA map
 		
-			for(mobi = MOBILE_BASE; mobi < MOBILE_END; mobi++)
+			for(mobi = (nand.is_bb ? BB_MOBILE_FSROOT:MOBILE_FSROOT); mobi < MOBILE_END; mobi++)
 			{
 				if(xenon_nandfs_get_blocktype(meta) == mobi)
 					tmp_ver = xenon_nandfs_get_fssequence(meta);
@@ -444,7 +450,7 @@ bool xenon_nandfs_init(void)
 				
 				if(tmp_ver >= 0)
 				{
-					if(mobi == MOBILE_FSROOT) // fs root
+					if(mobi == (nand.is_bb ? BB_MOBILE_FSROOT:MOBILE_FSROOT)) // fs root
 					{
 						if(tmp_ver >= prev_fsroot_ver) 
 						{
@@ -458,7 +464,7 @@ bool xenon_nandfs_init(void)
 						xenon_nandfs_parse_fsentries(userbuf);
 						ret = true;
 					}
-					else
+					else // MobileB - MobileH
 					{	
 						if(tmp_ver >= prev_mobi_ver)
 						{

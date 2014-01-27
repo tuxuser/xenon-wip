@@ -3,9 +3,9 @@
 
 #define MMC_ANCHOR_BLOCKS 		2
 #define MMC_ANCHOR_HASH_LEN		0x14
-#define MMC_ANCHOR_VERSION_POS	0x18
+#define MMC_ANCHOR_VERSION_POS	0x1A
 #define MMC_ANCHOR_MOBI_START	0x1C
-#define MMC_ANCHOR_MOBI_SIZE	0x8
+#define MMC_ANCHOR_MOBI_SIZE	0x4
 
 #define MAX_MOBILE				0xF
 #define MOBILE_BASE				0x30
@@ -128,7 +128,7 @@ u32 xenon_nandfs_get_fssize(METADATA* meta);
 u32 xenon_nandfs_get_fsfreepages(METADATA* meta);
 u32 xenon_nandfs_get_fssequence(METADATA* meta);
 bool xenon_nandfs_check_mmc_anchor_sha(u8* buf);
-u32 xenon_nandfs_get_mmc_anchor_ver(u8* buf);
+u16 xenon_nandfs_get_mmc_anchor_ver(u8* buf);
 u16 xenon_nandfs_get_mmc_mobileblock(u8* buf, u8 mobi);
 u16 xenon_nandfs_get_mmc_mobilesize(u8* buf, u8 mobi);
 bool xenon_nandfs_check_ecc(PAGEDATA* pdata);
