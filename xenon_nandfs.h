@@ -20,6 +20,8 @@
 #define BB_MOBILE_PB		(MOBILE_PB*2)	// pages counting towards FsPageCount
 #define BB_MOBILE_MULTI		4				// small block multiplier for (BB_MOBILE_PB-FsPageCount)
 
+#define MAX_LBA				0x1000
+
 typedef struct _METADATA_SMALLBLOCK{
 	u8 BlockID1; // lba/id = (((BlockID0&0xF)<<8)+(BlockID1))
 	u8 BlockID0 : 4;
@@ -90,8 +92,8 @@ typedef struct _METADATA{
 } METADATA, *PMETADATA;
 
 typedef struct _PAGEDATA{
-	u8 user[512];
-	METADATA meta;
+	u8 User[512];
+	METADATA Meta;
 } PAGEDATA, *PPAGEDATA;
 
 typedef struct _FS_TIME_STAMP{
@@ -104,36 +106,39 @@ typedef struct _FS_TIME_STAMP{
 } FS_TIME_STAMP;
 
 typedef struct _FS_ENT{
-	char fileName[22];
-	u16 startCluster; //u8 startCluster[2];
-	u32 clusterSz; //u8 clusterSz[4];
-	u32 typeTime;
+	char FileName[22];
+	u16 StartCluster; //u8 startCluster[2];
+	u32 ClusterSz; //u8 clusterSz[4];
+	u32 TypeTime;
 } FS_ENT, *PFS_ENT;
 
 typedef struct _DUMPDATA{
-	u16 lba_map[0x1000];
-	u16 fsroot_block;
-	u16 fsroot_v;
-	u32 mobile_block[MAX_MOBILE];
-	u32 mobile_size[MAX_MOBILE];
-	u16 mobile_ver[MAX_MOBILE];
-	FS_ENT *fs_ent;
+	u16 LBAMap[MAX_LBA];
+	u16 FSRootBlock;
+	u16 FSRootVer;
+	u8 FSRootBuf[FSROOT_SIZE];
+	u16* pFSRootBufShort; // u16* pFSRootBufShort = (u16*)FSRootBuf;
+	u8 FSRootFileBuf[FSROOT_SIZE];
+	u32 MobileBlock[MAX_MOBILE];
+	u32 MobileSize[MAX_MOBILE];
+	u16 MobileVer[MAX_MOBILE];
+	FS_ENT *FsEnt;
 } DUMPDATA, *PDUMPDATA;
 
-void xenon_nandfs_calcecc(u32* data, u8* edc);
-u16 xenon_nandfs_get_lba(METADATA* meta);
-u8 xenon_nandfs_get_blocktype(METADATA* meta);
-u8 xenon_nandfs_get_badblock_mark(METADATA* meta);
-u32 xenon_nandfs_get_fssize(METADATA* meta);
-u32 xenon_nandfs_get_fsfreepages(METADATA* meta);
-u32 xenon_nandfs_get_fssequence(METADATA* meta);
-bool xenon_nandfs_check_mmc_anchor_sha(u8* buf);
-u16 xenon_nandfs_get_mmc_anchor_ver(u8* buf);
-u16 xenon_nandfs_get_mmc_mobileblock(u8* buf, u8 mobi);
-u16 xenon_nandfs_get_mmc_mobilesize(u8* buf, u8 mobi);
-bool xenon_nandfs_check_ecc(PAGEDATA* pdata);
-int xenon_nandfs_parse_fsentries(u8* userbuf);
-bool xenon_nandfs_init(void);
+void xenon_nandfs_CalcECC(u32* data, u8* edc);
+u16 xenon_nandfs_GetLBA(METADATA* meta);
+u8 xenon_nandfs_GetBlockType(METADATA* meta);
+u8 xenon_nandfs_GetBadblockMark(METADATA* meta);
+u32 xenon_nandfs_GetFsSize(METADATA* meta);
+u32 xenon_nandfs_GetFsFreepages(METADATA* meta);
+u32 xenon_nandfs_GetFsSequence(METADATA* meta);
+bool xenon_nandfs_CheckMMCAnchorSha(u8* buf);
+u16 xenon_nandfs_GetMMCAnchorVer(u8* buf);
+u16 xenon_nandfs_GetMMCMobileBlock(u8* buf, u8 mobi);
+u16 xenon_nandfs_GetMMCMobileSize(u8* buf, u8 mobi);
+bool xenon_nandfs_CheckECC(PAGEDATA* pdata);
+int xenon_nandfs_SplitFsRootBuf(u8* userbuf);
+bool xenon_nandfs_Init(void);
 bool xenon_nandfs_init_one(void);
 
 #endif
