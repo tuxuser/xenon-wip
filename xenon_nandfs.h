@@ -10,6 +10,7 @@
 #define MAX_MOBILE				0xF
 #define MOBILE_BASE				0x30
 #define MOBILE_END				0x3F
+
 #define MOBILE_FSROOT			0x30
 #define BB_MOBILE_FSROOT		0x2C
 
@@ -21,6 +22,7 @@
 #define BB_MOBILE_MULTI		4				// small block multiplier for (BB_MOBILE_PB-FsPageCount)
 
 #define MAX_LBA				0x1000
+#define MAX_FSENT			256
 
 typedef struct _METADATA_SMALLBLOCK{
 	unsigned char BlockID1; // lba/id = (((BlockID0&0xF)<<8)+(BlockID1))
@@ -113,7 +115,6 @@ typedef struct _FS_ENT{
 } FS_ENT, *PFS_ENT;
 
 typedef struct _MOBILE_ENT{
-	unsigned char Ident;
 	unsigned char Version;
 	unsigned short Block;
 	unsigned int Size;
@@ -126,8 +127,8 @@ typedef struct _DUMPDATA{
 	unsigned char FSRootBuf[FSROOT_SIZE];
 	unsigned short* pFSRootBufShort; // unsigned short* pFSRootBufShort = (unsigned short*)FSRootBuf;
 	unsigned char FSRootFileBuf[FSROOT_SIZE];
-	MOBILE_ENT Mobile[0x13];
-	FS_ENT *FsEnt;
+	MOBILE_ENT Mobile[MAX_MOBILE];
+	FS_ENT *FsEnt[MAX_FSENT];
 } DUMPDATA, *PDUMPDATA;
 
 void xenon_nandfs_CalcECC(unsigned int* data, unsigned char* edc);

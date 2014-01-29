@@ -477,20 +477,20 @@ unsigned int xenon_nandfs_ExtractFsEntry(void)
 	
 	for(i=0; i<256; i++)
 	{
-		dumpdata.FsEnt = (FS_ENT*)&dumpdata.FSRootFileBuf[i*sizeof(FS_ENT)];
-		if(dumpdata.FsEnt->FileName[0] != 0)
+		dumpdata.FsEnt[i] = (FS_ENT*)&dumpdata.FSRootFileBuf[i*sizeof(FS_ENT)];
+		if(dumpdata.FsEnt[i]->FileName[0] != 0)
 		{
-			printk(KERN_INFO "file: %s ", dumpdata.FsEnt->FileName);
-			for(k=0; k< (22-strlen(dumpdata.FsEnt->FileName)); k++)
+			printk(KERN_INFO "file: %s ", dumpdata.FsEnt[i]->FileName);
+			for(k=0; k< (22-strlen(dumpdata.FsEnt[i]->FileName)); k++)
 			{
 				printk(KERN_INFO " ");
 			}
-			fsBlock = __builtin_bswap16(dumpdata.FsEnt->StartCluster);
-			fsFileSize = __builtin_bswap32(dumpdata.FsEnt->ClusterSz);
-			printk(KERN_INFO "start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, (unsigned int)__builtin_bswap32(dumpdata.FsEnt->TypeTime));
+			fsBlock = __builtin_bswap16(dumpdata.FsEnt[i]->StartCluster);
+			fsFileSize = __builtin_bswap32(dumpdata.FsEnt[i]->ClusterSz);
+			printk(KERN_INFO "start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, (unsigned int)__builtin_bswap32(dumpdata.FsEnt[i]->TypeTime));
 
 			// extract the file
-			if(dumpdata.FsEnt->FileName[0] != 0x5) // file is erased but still in the record
+			if(dumpdata.FsEnt[i]->FileName[0] != 0x5) // file is erased but still in the record
 			{
 				realBlock = fsBlock;
 				while(fsFileSize > nand.BlockSz)
@@ -499,7 +499,7 @@ unsigned int xenon_nandfs_ExtractFsEntry(void)
 					printk(KERN_INFO "%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
 #endif
 #ifdef WRITE_OUT
-					appendBlockToFile(dumpdata.FsEnt->FileName, realBlock, nand.BlockSz);
+					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, nand.BlockSz);
 #endif
 					fsFileSize = fsFileSize-nand.BlockSz;
 					fsBlock = __builtin_bswap16(dumpdata.pFSRootBufShort[(fsBlock)]); // gets next block
@@ -512,7 +512,7 @@ unsigned int xenon_nandfs_ExtractFsEntry(void)
 					printk(KERN_INFO "%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
 #endif
 #ifdef WRITE_OUT
-					appendBlockToFile(dumpdata.FsEnt->FileName, realBlock, fsFileSize);
+					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, fsFileSize);
 #endif
 				}
 				else
@@ -522,7 +522,6 @@ unsigned int xenon_nandfs_ExtractFsEntry(void)
 				printk(KERN_INFO "   erased still has entry???");		
 			printk(KERN_INFO "\n\n");
 		}
-		dumpdata.FsEnt++;
 	}
 	return 0;
 }
@@ -558,7 +557,7 @@ int xenon_nandfs_SplitFsRootBuf(unsigned char* userbuf)
 
 bool xenon_nandfs_init(void)
 {
-	unsigned char mobi;
+	unsigned char mobi, fsroot_ident;
 	unsigned int i, j, mmc_anchor_blk, prev_mobi_ver, prev_fsroot_ver, tmp_ver, lba, blk, size = 0, page_each;
 	bool ret = false;
 	unsigned char anchor_num = 0;
@@ -616,9 +615,9 @@ bool xenon_nandfs_init(void)
 			{
 				mobileName[6] = mobi+0x11;
 				printk(KERN_INFO "%s found at block 0x%x (off: 0x%x), v %i, size %d (0x%x) bytes\n", mobileName, blk, (blk*nand.BlockSz), prev_mobi_ver, size*nand.BlockSz, size*nand.BlockSz);
-				dumpdata.MobileBlock[mobi-MOBILE_BASE] = blk;
-				dumpdata.MobileSize[mobi-MOBILE_BASE] = size * nand.BlockSz;
-				dumpdata.MobileVer[mobi-MOBILE_BASE] = prev_mobi_ver; // anchor version
+				dumpdata.Mobile[mobi-MOBILE_BASE].Version = prev_mobi_ver;
+				dumpdata.Mobile[mobi-MOBILE_BASE].Block = blk;
+				dumpdata.Mobile[mobi-MOBILE_BASE].Size = size * nand.BlockSz;
 			}
 		}
 		vfree(blockbuf);
@@ -629,6 +628,11 @@ bool xenon_nandfs_init(void)
 		unsigned char* userbuf = (unsigned char *)vmalloc(nand.BlockSz);
 		unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
 		
+		if(nand.isBB) // Set FSroot Identifier, depending on nandtype
+			fsroot_ident = BB_MOBILE_FSROOT;
+		else
+			fsroot_ident = MOBILE_FSROOT;
+		
 		for(blk=0; blk < nand.BlocksCount; blk++)
 		{
 			xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, blk);
@@ -637,61 +641,54 @@ bool xenon_nandfs_init(void)
 			lba = xenon_nandfs_GetLBA(meta);
 			dumpdata.LBAMap[blk] = lba; // Create LBA map
 			
-			for(mobi = (nand.isBB ? BB_MOBILE_FSROOT:MOBILE_FSROOT); mobi < MOBILE_END; mobi++)
+			mobi = xenon_nandfs_GetBlockType(meta);
+			tmp_ver = xenon_nandfs_GetFsSequence(meta);
+				
+			if(mobi == fsroot_ident) // fs root
 			{
-				if(xenon_nandfs_GetBlockType(meta) == mobi)
-					tmp_ver = xenon_nandfs_GetFsSequence(meta);
+				prev_fsroot_ver = dumpdata.FSRootVer; // get current version
+				if(tmp_ver >= prev_fsroot_ver) 
+				{
+					dumpdata.FSRootVer = tmp_ver; // assign new version number
+					dumpdata.FSRootBlock = blk;
+				}	
 				else
 					continue;
-				
-				prev_mobi_ver = dumpdata.Mobile->Version; // get current version
-				prev_fsroot_ver = dumpdata.FSRootVer; // get current version
-				
-				if(mobi == (nand.isBB ? BB_MOBILE_FSROOT:MOBILE_FSROOT)) // fs root
+					
+				printk(KERN_INFO "FSRoot found at block 0x%x (off: 0x%x), v %i, size %d (0x%x) bytes\n", blk, (blk*nand.BlockSzPhys), dumpdata.FSRootVer, nand.BlockSz, nand.BlockSz);
+				xenon_nandfs_SplitFsRootBuf(userbuf);
+				ret = true;
+			}
+			else if((mobi >= MOBILE_BASE) && (mobi < MOBILE_END)) //Mobile*.dat
+			{	
+				prev_mobi_ver = dumpdata.Mobile[mobi-MOBILE_BASE].Version;
+				if(tmp_ver >= prev_mobi_ver)
+					dumpdata.Mobile[mobi-MOBILE_BASE].Version = tmp_ver;
+				else
+					continue;
+
+				page_each = nand.PagesInBlock - xenon_nandfs_GetFsFreepages(meta);
+				//printf("pageEach: %x\n", pageEach);
+				// find the most recent instance in the block and dump it
+				j = 0;
+				for(i=0; i < nand.PagesInBlock; i += page_each)
 				{
-					if(tmp_ver >= prev_fsroot_ver) 
-					{
-						dumpdata.FSRootVer = tmp_ver; // assign new version number
-						dumpdata.FSRootBlock = blk;
-					}	
-					else
-						continue;
-					
-					printk(KERN_INFO "FSRoot found at block 0x%x (off: 0x%x), v %i, size %d (0x%x) bytes\n", blk, (blk*nand.BlockSzPhys), dumpdata.FSRootVer, nand.BlockSz, nand.BlockSz);
-					xenon_nandfs_SplitFsRootBuf(userbuf);
-					ret = true;
+					meta = (METADATA*)&sparebuf[nand.MetaSz*i];
+					//printf("i: %d type: %x\n", i, meta->FsBlockType);
+					if(xenon_nandfs_GetBlockType(meta) == (mobi))
+						j = i;
+					if(xenon_nandfs_GetBlockType(meta) == 0x3F)
+						i = nand.PagesInBlock;
 				}
-				else // MobileB - MobileH
-				{	
-					if(tmp_ver >= prev_mobi_ver)
-					{
-						dumpdata.MobileVer[mobi-MOBILE_BASE] = tmp_ver; // assign new version number
-						dumpdata.MobileSize[mobi-MOBILE_BASE] = size;
-						dumpdata.MobileBlock[mobi-MOBILE_BASE] = blk;
-					}
-					else
-						continue;
-						
-					page_each = nand.PagesInBlock - xenon_nandfs_GetFsFreepages(meta);
-					//printf("pageEach: %x\n", pageEach);
-					// find the most recent instance in the block and dump it
-					j = 0;
-					for(i=0; i < nand.PagesInBlock; i += page_each)
-					{
-						meta = (METADATA*)&sparebuf[nand.MetaSz*i];
-						//printf("i: %d type: %x\n", i, meta->FsBlockType);
-						if(xenon_nandfs_GetBlockType(meta) == mobi)
-							j = i;
-						if(xenon_nandfs_GetBlockType(meta) == 0x3f)
-							i = nand.PagesInBlock;
-					}
+			
+				meta = (METADATA*)&sparebuf[j*nand.MetaSz];
+				size = xenon_nandfs_GetFsSize(meta);
 				
-					meta = (METADATA*)&sparebuf[j*nand.MetaSz];
-					size = xenon_nandfs_GetFsSize(meta);
-					
-					mobileName[6] = mobi+0x11;
-					printk(KERN_INFO "%s found at block 0x%x (off: 0x%x), page %d, v %i, size %d (0x%x) bytes\n", mobileName, blk, (blk*nand.BlockSzPhys), j, tmp_ver, size, size);
-				}
+				dumpdata.Mobile[mobi-MOBILE_BASE].Size = size;
+				dumpdata.Mobile[mobi-MOBILE_BASE].Block = blk;
+				
+				mobileName[6] = mobi+0x31;
+				printk(KERN_INFO "%s found at block 0x%x (off: 0x%x), page %d, v %i, size %d (0x%x) bytes\n", mobileName, blk, (blk*nand.BlockSzPhys), j, tmp_ver, size, size);
 			}
 		}
 		vfree(userbuf);
