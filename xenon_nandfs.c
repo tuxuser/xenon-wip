@@ -21,9 +21,9 @@
  * https://www.kernel.org/doc/htmldocs/mtdnand/
  * http://www.informit.com/articles/article.aspx?p=1187102&seqNum=1
  */
-#define DEBUG
-//#define FSROOT_WRITE_OUT
-//#define WRITE_OUT
+
+#include "xenon_sfc.h"
+#include "xenon_nandfs.h"
 
 #ifdef DEBUG
 
@@ -41,27 +41,24 @@
 
 #endif
 
-#include "xenon_sfc.h"
-#include "xenon_nandfs.h"
-
 static xenon_nand nand = {0};
-static DUMPDATA dumpdata = {0};
+static DUMPDATA dumpdata;
 
 #ifdef DEBUG
 
-	u8 fixed_type = -1;
+	unsigned char fixed_type = -1;
 	FILE * pFile;
 	
-	static inline u16 __builtin_bswap16(u16 a)
+	static inline unsigned short __builtin_bswap16(unsigned short a)
 	{
 	  return (a<<8)|(a>>8);
 	}
 	
-	int xenon_sfc_ReadBlockSeparate(u8* user, u8* spare, u32 block)
+	int xenon_sfc_ReadBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block)
 	{
-		u16 i;
-		u8* buf = malloc(nand.BlockSzPhys);
-		u32 addr = block * nand.BlockSzPhys;
+		unsigned short i;
+		unsigned char* buf = malloc(nand.BlockSzPhys);
+		unsigned int addr = block * nand.BlockSzPhys;
 		//printf("Reading block %04x from addr %08x\n", block, addr);
 		fseek(pFile, addr, SEEK_SET);
 		fread(buf ,nand.BlockSzPhys, 1, pFile);
@@ -70,7 +67,7 @@ static DUMPDATA dumpdata = {0};
 			memcpy(&spare[i*nand.MetaSz], &buf[(i*nand.PageSzPhys)+nand.PageSz], nand.MetaSz);
 		}
 	}
-	void xenon_sfc_ReadMapData(u8* buf, u32 startaddr, u32 total_len)
+	void xenon_sfc_ReadMapData(unsigned char* buf, unsigned int startaddr, unsigned int total_len)
 	{
 		fseek(pFile, startaddr, SEEK_SET);
 		fread(buf, total_len, 1, pFile);
@@ -175,155 +172,7 @@ static DUMPDATA dumpdata = {0};
 		return 0;
 	}
 
-#endif
-
-void xenon_nandfs_CalcECC(u32 *data, u8* edc) {
-	u32 i=0, val=0;
-	u32 v=0;
-
-	for (i = 0; i < 0x1066; i++)
-	{
-		if (!(i & 31))
-			v = ~__builtin_bswap32(*data++);
-		val ^= v & 1;
-		v>>=1;
-		if (val & 1)
-			val ^= 0x6954559;
-		val >>= 1;
-	}
-
-	val = ~val;
-
-	// 26 bit ecc data
-	edc[0] = ((val << 6) | (data[0x20C] & 0x3F)) & 0xFF;
-	edc[1] = (val >> 2) & 0xFF;
-	edc[2] = (val >> 10) & 0xFF;
-	edc[3] = (val >> 18) & 0xFF;
-}
-
-u16 xenon_nandfs_GetLBA(METADATA* meta)
-{
-	switch (nand.MetaType)
-	{
-		case META_TYPE_SM:
-			return (((meta->sm.BlockID0&0xF)<<8)+(meta->sm.BlockID1));
-		case META_TYPE_BOS:
-			return (((meta->bos.BlockID0<<8)&0xF)+(meta->bos.BlockID1&0xFF));
-		case META_TYPE_BG:
-			return (((meta->bg.BlockID0&0xF)<<8)+(meta->bg.BlockID1&0xFF));
-	}
-}
-
-u8 xenon_nandfs_GetBlockType(METADATA* meta)
-{
-	switch (nand.MetaType)
-	{
-		case META_TYPE_SM:
-			return (meta->sm.FsBlockType&0x3F);
-		case META_TYPE_BOS:
-			return (meta->bos.FsBlockType&0x3F);
-		case META_TYPE_BG:
-			return (meta->bg.FsBlockType&0x3F);
-	}
-}
-
-u8 xenon_nandfs_GetBadBlockMark(METADATA* meta)
-{
-	switch (nand.MetaType)
-	{
-		case META_TYPE_SM:
-			return meta->sm.BadBlock;
-		case META_TYPE_BOS:
-			return meta->bos.BadBlock;
-		case META_TYPE_BG:
-			return meta->bg.BadBlock;
-	}
-}
-
-u32 xenon_nandfs_GetFsSize(METADATA* meta)
-{
-	switch (nand.MetaType)
-	{
-		case META_TYPE_SM:
-			return ((meta->sm.FsSize0<<8)+meta->sm.FsSize1);
-		case META_TYPE_BOS:
-			return (((meta->bos.FsSize0<<8)&0xFF)+(meta->bos.FsSize1&0xFF));
-		case META_TYPE_BG:
-			return (((meta->bg.FsSize0&0xFF)<<8)+(meta->bg.FsSize1&0xFF));
-	}
-}
-
-u32 xenon_nandfs_GetFsFreepages(METADATA* meta)
-{
-	switch (nand.MetaType)
-	{
-		case META_TYPE_SM:
-			return meta->sm.FsPageCount;
-		case META_TYPE_BOS:
-			return meta->bos.FsPageCount;
-		case META_TYPE_BG:
-			return (meta->bg.FsPageCount * 4);
-	}
-}
-
-u32 xenon_nandfs_GetFsSequence(METADATA* meta)
-{
-	switch (nand.MetaType)
-	{
-		case META_TYPE_SM:
-			return (meta->sm.FsSequence0+(meta->sm.FsSequence1<<8)+(meta->sm.FsSequence2<<16));
-		case META_TYPE_BOS:
-			return (meta->bos.FsSequence0+(meta->bos.FsSequence1<<8)+(meta->bos.FsSequence2<<16));
-		case META_TYPE_BG:
-			return (meta->bg.FsSequence0+(meta->bg.FsSequence1<<8)+(meta->bg.FsSequence2<<16));
-	}
-}
-
-bool xenon_nandfs_CheckMMCAnchorSha(unsigned char* buf)
-{
-	//unsigned char* data = buf;
-	//CryptSha(&data[MMC_ANCHOR_HASH_LEN], (0x200-MMC_ANCHOR_HASH_LEN), NULL, 0, NULL, 0, sha, MMC_ANCHOR_HASH_LEN);
-	return 0;
-}
-
-u16 xenon_nandfs_GetMMCAnchorVer(u8* buf)
-{
-	u8* data = buf;
-	u16 tmp = (data[MMC_ANCHOR_VERSION_POS]<<8|data[MMC_ANCHOR_VERSION_POS+1]);
-
-	return tmp;
-}
-
-u16 xenon_nandfs_GetMMCMobileBlock(u8* buf, u8 mobi)
-{
-	u8* data = buf;
-	u8 mob = mobi - MOBILE_BASE;
-	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE);
-	u16 tmp = data[offset]<<8|data[offset+1];
-	
-	return tmp;
-}
-
-u16 xenon_nandfs_GetMMCMobileSize(u8* buf, u8 mobi)
-{
-	u8* data = buf;
-	u8 mob = mobi - MOBILE_BASE;
-	u8 offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x2;
-	u16 tmp = data[offset]<<8|data[offset+1];
-	
-	return __builtin_bswap16(tmp);
-}
-
-bool xenon_nandfs_CheckECC(PAGEDATA* pdata)
-{
-	u8 ecd[4];
-	xenon_nandfs_CalcECC((u32*)pdata->User, ecd);
-	if ((ecd[0] == pdata->Meta.sm.ECC0) && (ecd[1] == pdata->Meta.sm.ECC1) && (ecd[2] == pdata->Meta.sm.ECC2) && (ecd[3] == pdata->Meta.sm.ECC3))
-		return 0;
-	return 1;
-}
-
-int writeToFile(char* filename, u8 *buf, u32 size)
+int writeToFile(char* filename, unsigned char *buf, unsigned int size)
 {
 	FILE* outfile;
 	outfile = fopen(filename, "wb");
@@ -349,12 +198,12 @@ int fileExists(char* filename)
 	return ret;
 }
 
-void appendBlockToFile(char* filename, u32 block, u32 len)
+void appendBlockToFile(char* filename, unsigned int block, unsigned int len)
 {
 	FILE* outfile;
-	u32 offsetUser = block*nand.BlockSz;
-	u8 *userbuf = (u8 *)vmalloc(nand.BlockSz);
-	u8* sparebuf = (u8 *)vmalloc(nand.MetaSz*nand.PagesInBlock);
+	unsigned int offsetUser = block*nand.BlockSz;
+	unsigned char *userbuf = (unsigned char *)vmalloc(nand.BlockSz);
+	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
 
 	if(nand.MMC)
 		xenon_sfc_ReadMapData(userbuf, offsetUser, nand.BlockSz); 
@@ -369,28 +218,236 @@ void appendBlockToFile(char* filename, u32 block, u32 len)
 	fclose(outfile);
 }
 
-u32 xenon_nandfs_ExtractFsEntry(void)
+void xenon_nandfs_bb_test(void)
 {
-	u32 i, k;
-	u32 fsBlock, realBlock;
-	u32 fsFileSize;
-	FS_TIME_STAMP timeSt;
+	unsigned short prev_lba, cur_lba;
+	unsigned int page, block;
+	unsigned char* userbuf = (unsigned char *)vmalloc(nand.BlockSz);
+	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
+	METADATA *meta;
 	
-	dumpdata.pFSRootBufShort = (u16*)dumpdata.FSRootBuf;
+	for(block=0;block<nand.BlocksCount;block++)
+	{
+		xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, block);
+		for(page=0;page<nand.PagesInBlock;page++)
+		{
+			meta = (METADATA*)&sparebuf[page*nand.MetaSz];
+			cur_lba = xenon_nandfs_GetLBA(meta);
+			if(cur_lba != prev_lba)
+			{
+				printk(KERN_INFO "block: 0x%03x, page: %03i, LBA: %04x\n", block, page, cur_lba);
+				prev_lba = cur_lba;
+			}
+		}
+	}
+	
+}
+#endif
+
+void xenon_nandfs_CalcECC(unsigned int *data, unsigned char* edc) {
+	unsigned int i=0, val=0;
+	unsigned int v=0;
+
+	for (i = 0; i < 0x1066; i++)
+	{
+		if (!(i & 31))
+			v = ~__builtin_bswap32(*data++);
+		val ^= v & 1;
+		v>>=1;
+		if (val & 1)
+			val ^= 0x6954559;
+		val >>= 1;
+	}
+
+	val = ~val;
+
+	// 26 bit ecc data
+	edc[0] = ((val << 6) | (data[0x20C] & 0x3F)) & 0xFF;
+	edc[1] = (val >> 2) & 0xFF;
+	edc[2] = (val >> 10) & 0xFF;
+	edc[3] = (val >> 18) & 0xFF;
+}
+
+unsigned short xenon_nandfs_GetLBA(METADATA* meta)
+{
+	unsigned short ret = 0;
+	
+	switch (nand.MetaType)
+	{
+		case META_TYPE_SM:
+			ret =  (((meta->sm.BlockID0&0xF)<<8)+(meta->sm.BlockID1));
+			break;
+		case META_TYPE_BOS:
+			ret =  (((meta->bos.BlockID0<<8)&0xF)+(meta->bos.BlockID1&0xFF));
+			break;
+		case META_TYPE_BG:
+			ret =  (((meta->bg.BlockID0&0xF)<<8)+(meta->bg.BlockID1&0xFF));
+			break;
+	}
+	return ret;
+}
+
+unsigned char xenon_nandfs_GetBlockType(METADATA* meta)
+{
+	unsigned char ret = 0;
+	
+	switch (nand.MetaType)
+	{
+		case META_TYPE_SM:
+			ret =  (meta->sm.FsBlockType&0x3F);
+			break;
+		case META_TYPE_BOS:
+			ret =  (meta->bos.FsBlockType&0x3F);
+			break;
+		case META_TYPE_BG:
+			ret =  (meta->bg.FsBlockType&0x3F);
+			break;
+	}
+	return ret;
+}
+
+unsigned char xenon_nandfs_GetBadBlockMark(METADATA* meta)
+{
+	unsigned char ret = 0;
+	
+	switch (nand.MetaType)
+	{
+		case META_TYPE_SM:
+			ret =  meta->sm.BadBlock;
+			break;
+		case META_TYPE_BOS:
+			ret =  meta->bos.BadBlock;
+			break;
+		case META_TYPE_BG:
+			ret =  meta->bg.BadBlock;
+			break;
+	}
+	return ret;
+}
+
+unsigned int xenon_nandfs_GetFsSize(METADATA* meta)
+{
+	unsigned int ret = 0;
+	
+	switch (nand.MetaType)
+	{
+		case META_TYPE_SM:
+			ret = ((meta->sm.FsSize0<<8)+meta->sm.FsSize1);
+			break;
+		case META_TYPE_BOS:
+			ret = (((meta->bos.FsSize0<<8)&0xFF)+(meta->bos.FsSize1&0xFF));
+			break;
+		case META_TYPE_BG:
+			ret = (((meta->bg.FsSize0&0xFF)<<8)+(meta->bg.FsSize1&0xFF));
+			break;
+	}
+	return ret;
+}
+
+unsigned int xenon_nandfs_GetFsFreepages(METADATA* meta)
+{
+	unsigned int ret = 0;
+	
+	switch (nand.MetaType)
+	{
+		case META_TYPE_SM:
+			ret =  meta->sm.FsPageCount;
+			break;
+		case META_TYPE_BOS:
+			ret =  meta->bos.FsPageCount;
+			break;
+		case META_TYPE_BG:
+			ret =  (meta->bg.FsPageCount * 4);
+			break;
+	}
+	return ret;
+}
+
+unsigned int xenon_nandfs_GetFsSequence(METADATA* meta)
+{
+	unsigned int ret = 0;
+	
+	switch (nand.MetaType)
+	{
+		case META_TYPE_SM:
+			ret =  (meta->sm.FsSequence0+(meta->sm.FsSequence1<<8)+(meta->sm.FsSequence2<<16));
+			break;
+		case META_TYPE_BOS:
+			ret =  (meta->bos.FsSequence0+(meta->bos.FsSequence1<<8)+(meta->bos.FsSequence2<<16));
+			break;
+		case META_TYPE_BG:
+			ret =  (meta->bg.FsSequence0+(meta->bg.FsSequence1<<8)+(meta->bg.FsSequence2<<16));
+			break;
+	}
+	return ret;
+}
+
+bool xenon_nandfs_CheckMMCAnchorSha(unsigned char* buf)
+{
+	//unsigned char* data = buf;
+	//CryptSha(&data[MMC_ANCHOR_HASH_LEN], (0x200-MMC_ANCHOR_HASH_LEN), NULL, 0, NULL, 0, sha, MMC_ANCHOR_HASH_LEN);
+	return 0;
+}
+
+unsigned short xenon_nandfs_GetMMCAnchorVer(unsigned char* buf)
+{
+	unsigned char* data = buf;
+	unsigned short tmp = (data[MMC_ANCHOR_VERSION_POS]<<8|data[MMC_ANCHOR_VERSION_POS+1]);
+
+	return tmp;
+}
+
+unsigned short xenon_nandfs_GetMMCMobileBlock(unsigned char* buf, unsigned char mobi)
+{
+	unsigned char* data = buf;
+	unsigned char mob = mobi - MOBILE_BASE;
+	unsigned char offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE);
+	unsigned short tmp = data[offset]<<8|data[offset+1];
+	
+	return tmp;
+}
+
+unsigned short xenon_nandfs_GetMMCMobileSize(unsigned char* buf, unsigned char mobi)
+{
+	unsigned char* data = buf;
+	unsigned char mob = mobi - MOBILE_BASE;
+	unsigned char offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x2;
+	unsigned short tmp = data[offset]<<8|data[offset+1];
+	
+	return __builtin_bswap16(tmp);
+}
+
+bool xenon_nandfs_CheckECC(PAGEDATA* pdata)
+{
+	unsigned char ecd[4];
+	xenon_nandfs_CalcECC((unsigned int*)pdata->User, ecd);
+	if ((ecd[0] == pdata->Meta.sm.ECC0) && (ecd[1] == pdata->Meta.sm.ECC1) && (ecd[2] == pdata->Meta.sm.ECC2) && (ecd[3] == pdata->Meta.sm.ECC3))
+		return 0;
+	return 1;
+}
+
+unsigned int xenon_nandfs_ExtractFsEntry(void)
+{
+	unsigned int i, k;
+	unsigned int fsBlock, realBlock;
+	unsigned int fsFileSize;
+//	FS_TIME_STAMP timeSt;
+	
+	dumpdata.pFSRootBufShort = (unsigned short*)dumpdata.FSRootBuf;
 	
 	for(i=0; i<256; i++)
 	{
 		dumpdata.FsEnt = (FS_ENT*)&dumpdata.FSRootFileBuf[i*sizeof(FS_ENT)];
 		if(dumpdata.FsEnt->FileName[0] != 0)
 		{
-			printf("file: %s ", dumpdata.FsEnt->FileName);
+			printk(KERN_INFO "file: %s ", dumpdata.FsEnt->FileName);
 			for(k=0; k< (22-strlen(dumpdata.FsEnt->FileName)); k++)
 			{
-				printf(" ");
+				printk(KERN_INFO " ");
 			}
 			fsBlock = __builtin_bswap16(dumpdata.FsEnt->StartCluster);
 			fsFileSize = __builtin_bswap32(dumpdata.FsEnt->ClusterSz);
-			printf("start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, __builtin_bswap32(dumpdata.FsEnt->TypeTime));
+			printk(KERN_INFO "start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, (unsigned int)__builtin_bswap32(dumpdata.FsEnt->TypeTime));
 
 			// extract the file
 			if(dumpdata.FsEnt->FileName[0] != 0x5) // file is erased but still in the record
@@ -399,7 +456,7 @@ u32 xenon_nandfs_ExtractFsEntry(void)
 				while(fsFileSize > nand.BlockSz)
 				{
 #ifdef DEBUG
-					printf("%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
+					printk(KERN_INFO "%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
 #endif
 #ifdef WRITE_OUT
 					appendBlockToFile(dumpdata.FsEnt->FileName, realBlock, nand.BlockSz);
@@ -411,27 +468,28 @@ u32 xenon_nandfs_ExtractFsEntry(void)
 				if((fsFileSize > 0)&&(fsBlock<0x1FFE))
 				{
 #ifdef DEBUG
-					printf("%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
+					printk(KERN_INFO "%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
 #endif
 #ifdef WRITE_OUT
 					appendBlockToFile(dumpdata.FsEnt->FileName, realBlock, fsFileSize);
 #endif
 				}
 				else
-					printf("** Couldn't write file tail! %04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
+					printk(KERN_INFO "** Couldn't write file tail! %04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
 			}
 			else
-				printf("   erased still has entry???");		
-			printf("\n\n");
+				printk(KERN_INFO "   erased still has entry???");		
+			printk(KERN_INFO "\n\n");
 		}
 		dumpdata.FsEnt++;
 	}
+	return 0;
 }
 
-int xenon_nandfs_SplitFsRootBuf(u8* userbuf)
+int xenon_nandfs_SplitFsRootBuf(unsigned char* userbuf)
 {
-	u32 i, j, root_off, file_off, ttl_off;
-	u8* data = userbuf;
+	unsigned int i, j, root_off, file_off, ttl_off;
+	unsigned char* data = userbuf;
 	
 	root_off = 0;
 	file_off = 0;
@@ -457,19 +515,19 @@ int xenon_nandfs_SplitFsRootBuf(u8* userbuf)
 	return 0;
 }
 
-bool xenon_nandfs_Init(void)
+bool xenon_nandfs_init(void)
 {
-	u8 mobi;
-	u32 i, j, mmc_anchor_blk, prev_mobi_ver, prev_fsroot_ver, tmp_ver, lba, blk, size, page_each;
+	unsigned char mobi;
+	unsigned int i, j, mmc_anchor_blk, prev_mobi_ver, prev_fsroot_ver, tmp_ver, lba, blk, size = 0, page_each;
 	bool ret = false;
-	u8 anchor_num = 0;
+	unsigned char anchor_num = 0;
 	char mobileName[] = {"MobileA"};
 	METADATA* meta;
 
 	if(nand.MMC)
 	{
-		u8* blockbuf = (u8 *)vmalloc(nand.BlockSz * 2);
-		u8* fsrootbuf = (u8 *)vmalloc(nand.BlockSz);
+		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.BlockSz * 2);
+		unsigned char* fsrootbuf = (unsigned char *)vmalloc(nand.BlockSz);
 		mmc_anchor_blk = nand.ConfigBlock - MMC_ANCHOR_BLOCKS;
 		prev_mobi_ver = 0;
 		
@@ -527,8 +585,8 @@ bool xenon_nandfs_Init(void)
 	}
 	else
 	{
-		u8* userbuf = (u8 *)vmalloc(nand.BlockSz);
-		u8* sparebuf = (u8 *)vmalloc(nand.MetaSz*nand.PagesInBlock);
+		unsigned char* userbuf = (unsigned char *)vmalloc(nand.BlockSz);
+		unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
 		
 		for(blk=0; blk < nand.BlocksCount; blk++)
 		{
@@ -604,35 +662,12 @@ bool xenon_nandfs_Init(void)
 	return ret;
 }
 
-void xenon_nandfs_bb_test(void)
-{
-	u16 prev_lba, cur_lba;
-	u32 page, block;
-	u8* userbuf = (u8 *)vmalloc(nand.BlockSz);
-	u8* sparebuf = (u8 *)vmalloc(nand.MetaSz*nand.PagesInBlock);
-	METADATA *meta;
-	
-	for(block=0;block<nand.BlocksCount;block++)
-	{
-		xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, block);
-		for(page=0;page<nand.PagesInBlock;page++)
-		{
-			meta = (METADATA*)&sparebuf[page*nand.MetaSz];
-			cur_lba = xenon_nandfs_GetLBA(meta);
-			if(cur_lba != prev_lba)
-			{
-				printf("block: 0x%03x, page: %03i, LBA: %04x\n", block, page, cur_lba);
-				prev_lba = cur_lba;
-			}
-		}
-	}
-	
-}
-
 bool xenon_nandfs_init_one(void)
 {
 	xenon_sfc_GetNandStruct(&nand);
-	xenon_nandfs_Init();
+	xenon_nandfs_init();
+#ifdef DEBUG
 	xenon_nandfs_bb_test();
+#endif
 	return true;
 }

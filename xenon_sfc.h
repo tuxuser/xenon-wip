@@ -1,19 +1,15 @@
 #ifndef _XENON_SFC_H
 #define _XENON_SFC_H
 
+#include <linux/types.h>
+
+#define DEBUG
+//#define FSROOT_WRITE_OUT
+//#define WRITE_OUT
+
+#ifdef DEBUG
 #include <stdbool.h>
-
-typedef signed char s8;
-typedef unsigned char u8;
-
-typedef signed short s16;
-typedef unsigned short u16;
-
-typedef signed int s32;
-typedef unsigned int u32;
-
-typedef signed long s64;
-typedef unsigned long u64;
+#endif
 
 //Registers
 #define SFCX_CONFIG				(0x00)
@@ -108,45 +104,45 @@ typedef struct _xenon_nand
 	bool isBBCont;
 	bool isBB;
 	bool MMC;
-	u8 MetaType;
+	unsigned char MetaType;
 
-	u16 PageSz;
-	u16 PageSzPhys;
-	u8 MetaSz;
+	unsigned short PageSz;
+	unsigned short PageSzPhys;
+	unsigned char MetaSz;
 
-	u16 PagesInBlock;
-	u32 BlockSz;
-	u32 BlockSzPhys;
+	unsigned short PagesInBlock;
+	unsigned int BlockSz;
+	unsigned int BlockSzPhys;
 
-	u16 PagesCount;
-	u16 BlocksCount;
+	unsigned short PagesCount;
+	unsigned short BlocksCount;
 
-	u32 SizeSpare;
-	u32 SizeData;
-	u32 SizeDump;
-	u32 SizeWrite;
+	unsigned int SizeSpare;
+	unsigned int SizeData;
+	unsigned int SizeDump;
+	unsigned int SizeWrite;
 
-	u16 SizeUsableFs;
-	u16 ConfigBlock;
+	unsigned short SizeUsableFs;
+	unsigned short ConfigBlock;
 } xenon_nand, *pxenon_nand;
 
-unsigned long xenon_sfc_ReadReg(u32 addr);
-void xenon_sfc_WriteReg(u32 addr, unsigned long data);
+unsigned long xenon_sfc_ReadReg(unsigned int addr);
+void xenon_sfc_WriteReg(unsigned int addr, unsigned long data);
 
-int xenon_sfc_ReadPagePhy(u8* buf, u32 page);
-int xenon_sfc_ReadPageLog(u8* buf, u32 page);
-int xenon_sfc_WritePage(u8* buf, u32 page);
-int xenon_sfc_ReadBlock(u8* buf, u32 block);
-int xenon_sfc_ReadBlockSeparate(u8* user, u8* spare, u32 block);
-int xenon_sfc_WriteBlock(u8* buf, u32 block);
-int xenon_sfc_ReadBlocks(u8* buf, u32 block, u32 block_cnt);
-int xenon_sfc_WriteBlocks(u8* buf, u32 block, u32 block_cnt);
-int xenon_sfc_ReadFullFlash(u8* buf);
-int xenon_sfc_WriteFullFlash(u8* buf);
-int xenon_sfc_EraseBlock(u32 block);
-int xenon_sfc_EraseBlocks(u32 block, u32 block_cnt);
+int xenon_sfc_ReadPagePhy(unsigned char* buf, unsigned int page);
+int xenon_sfc_ReadPageLog(unsigned char* buf, unsigned int page);
+int xenon_sfc_WritePage(unsigned char* buf, unsigned int page);
+int xenon_sfc_ReadBlock(unsigned char* buf, unsigned int block);
+int xenon_sfc_ReadBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block);
+int xenon_sfc_WriteBlock(unsigned char* buf, unsigned int block);
+int xenon_sfc_ReadBlocks(unsigned char* buf, unsigned int block, unsigned int block_cnt);
+int xenon_sfc_WriteBlocks(unsigned char* buf, unsigned int block, unsigned int block_cnt);
+int xenon_sfc_ReadFullFlash(unsigned char* buf);
+int xenon_sfc_WriteFullFlash(unsigned char* buf);
+int xenon_sfc_EraseBlock(unsigned int block);
+int xenon_sfc_EraseBlocks(unsigned int block, unsigned int block_cnt);
 
-void xenon_sfc_ReadMapData(u8* buf, u32 startaddr, u32 total_len);
+void xenon_sfc_ReadMapData(unsigned char* buf, unsigned int startaddr, unsigned int total_len);
 
 void xenon_sfc_GetNandStruct(xenon_nand* xe_nand);
 
