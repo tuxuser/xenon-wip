@@ -114,8 +114,8 @@ typedef struct _xenon_nand
 	unsigned int BlockSz;
 	unsigned int BlockSzPhys;
 
-	unsigned short PagesCount;
-	unsigned short BlocksCount;
+	unsigned int PagesCount;
+	unsigned int BlocksCount;
 
 	unsigned int SizeSpare;
 	unsigned int SizeData;

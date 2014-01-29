@@ -112,6 +112,13 @@ typedef struct _FS_ENT{
 	unsigned int TypeTime;
 } FS_ENT, *PFS_ENT;
 
+typedef struct _MOBILE_ENT{
+	unsigned char Ident;
+	unsigned char Version;
+	unsigned short Block;
+	unsigned int Size;
+} MOBILE_ENT, *PMOBILE_ENT;
+
 typedef struct _DUMPDATA{
 	unsigned short LBAMap[MAX_LBA];
 	unsigned short FSRootBlock;
@@ -119,9 +126,7 @@ typedef struct _DUMPDATA{
 	unsigned char FSRootBuf[FSROOT_SIZE];
 	unsigned short* pFSRootBufShort; // unsigned short* pFSRootBufShort = (unsigned short*)FSRootBuf;
 	unsigned char FSRootFileBuf[FSROOT_SIZE];
-	unsigned int MobileBlock[MAX_MOBILE];
-	unsigned int MobileSize[MAX_MOBILE];
-	unsigned short MobileVer[MAX_MOBILE];
+	MOBILE_ENT Mobile[0x13];
 	FS_ENT *FsEnt;
 } DUMPDATA, *PDUMPDATA;
 
