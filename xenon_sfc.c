@@ -301,7 +301,25 @@ int xenon_sfc_ReadBlockSeparate(unsigned char* user, unsigned char* spare, unsig
 		user += sfc.nand.PageSz;
 		spare += sfc.nand.MetaSz;
 	}
+	vfree(data);
+	
 	return 0;	
+}
+
+int xenon_sfc_ReadBlockUser(unsigned char* buf, unsigned int block)
+{
+	unsigned char* tmp = (unsigned char *)vmalloc(sfc.nand.MetaSz*sfc.nand.PagesInBlock);
+	xenon_sfc_ReadBlockSeparate(buf, tmp, block);
+	vfree(tmp);
+	return 0;
+}
+
+int xenon_sfc_ReadBlockSpare(unsigned char* buf, unsigned int block)
+{
+	unsigned char* tmp = (unsigned char *)vmalloc(sfc.nand.BlockSz);
+	xenon_sfc_ReadBlockSeparate(tmp, buf, block);
+	vfree(tmp);
+	return 0;
 }
 
 int xenon_sfc_WriteBlock(unsigned char* buf, unsigned int block)

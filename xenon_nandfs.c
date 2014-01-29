@@ -67,11 +67,13 @@ static DUMPDATA dumpdata;
 			memcpy(&spare[i*nand.MetaSz], &buf[(i*nand.PageSzPhys)+nand.PageSz], nand.MetaSz);
 		}
 	}
+	
 	void xenon_sfc_ReadMapData(unsigned char* buf, unsigned int startaddr, unsigned int total_len)
 	{
 		fseek(pFile, startaddr, SEEK_SET);
 		fread(buf, total_len, 1, pFile);
 	}
+	
 	void xenon_sfc_GetNandStruct(xenon_nand* xe_nand)
 	{	
 		xe_nand->PagesInBlock = 32;
