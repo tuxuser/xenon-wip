@@ -74,9 +74,9 @@ typedef struct _METADATA_BIGBLOCK{
 	unsigned char FsSequence1;
 	unsigned char FsSequence0;
 	unsigned char FsUnused1;
-	unsigned char FsSize1; // FS: 06 ((FsSize0<<16)+(FsSize1<<8)+FsSize2) = cert size
-	unsigned char FsSize0; // FS: 20
-	unsigned char FsPageCount; // FS: 04 free pages left in block (multiples of 4 pages, ie if 3f then 3f*4 pages are free after)
+	unsigned char FsSize1; //FS: 06 (system reserve block number) else ((FsSize0<<16)+(FsSize1<<8)) = cert size
+	unsigned char FsSize0; // FS: 20 (size of flash filesys in smallblocks >>5)
+	unsigned char FsPageCount; // FS: 04 (system config reserve) free pages left in block (multiples of 4 pages, ie if 3f then 3f*4 pages are free after)
 	unsigned char FsUnused2[0x2];
 	unsigned char FsBlockType : 6; // FS: 2a bitmap: 2c (both use FS: vals for size), mobiles
 	unsigned char ECC3 : 2;
@@ -121,11 +121,14 @@ typedef struct _MOBILE_ENT{
 } MOBILE_ENT, *PMOBILE_ENT;
 
 typedef struct _DUMPDATA{
-	unsigned short LBAMap[MAX_LBA];
+	unsigned short MUStart;
+	unsigned short FSSize;
+	unsigned short FSStartBlock;
 	unsigned short FSRootBlock;
 	unsigned short FSRootVer;
+	unsigned short LBAMap[MAX_LBA];
 	unsigned char FSRootBuf[FSROOT_SIZE];
-	unsigned short* pFSRootBufShort; // unsigned short* pFSRootBufShort = (unsigned short*)FSRootBuf;
+	unsigned short* pFSRootBufShort;
 	unsigned char FSRootFileBuf[FSROOT_SIZE];
 	MOBILE_ENT Mobile[MAX_MOBILE];
 	FS_ENT *FsEnt[MAX_FSENT];
@@ -143,7 +146,9 @@ unsigned short xenon_nandfs_GetMMCAnchorVer(unsigned char* buf);
 unsigned short xenon_nandfs_GetMMCMobileBlock(unsigned char* buf, unsigned char mobi);
 unsigned short xenon_nandfs_GetMMCMobileSize(unsigned char* buf, unsigned char mobi);
 bool xenon_nandfs_CheckECC(PAGEDATA* pdata);
-int xenon_nandfs_SplitFsRootBuf(unsigned char* userbuf);
+int xenon_nandfs_ExtractFsEntry(void);
+int xenon_nandfs_ParseLBA(void);
+int xenon_nandfs_SplitFsRootBuf(int block);
 bool xenon_nandfs_init(void);
 bool xenon_nandfs_init_one(void);
 

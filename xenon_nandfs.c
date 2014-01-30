@@ -68,6 +68,55 @@ static DUMPDATA dumpdata;
 		}
 	}
 	
+	int xenon_sfc_ReadSmallBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block)
+	{
+		unsigned short i;
+		unsigned char* buf = malloc(0x4200);
+		unsigned int addr = block * 0x4200;
+		//printf("Reading block %04x from addr %08x\n", block, addr);
+		fseek(pFile, addr, SEEK_SET);
+		fread(buf ,0x4200, 1, pFile);
+		for(i=0;i<32; i++){
+			memcpy(&user[i*0x200], &buf[i*0x210], 0x200);
+			memcpy(&spare[i*0x10], &buf[(i*0x210)+0x200], 0x10);
+		}
+	}
+
+	int xenon_sfc_ReadBlockUser(unsigned char* buf, unsigned int block)
+	{
+		unsigned char* tmp = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
+		xenon_sfc_ReadBlockSeparate(buf, tmp, block);
+		vfree(tmp);
+		return 0;
+	}
+	
+	int xenon_sfc_ReadBlockSpare(unsigned char* buf, unsigned int block)
+	{
+		unsigned char* tmp = (unsigned char *)vmalloc(nand.BlockSz);
+		xenon_sfc_ReadBlockSeparate(tmp, buf, block);
+		vfree(tmp);
+		return 0;
+	}
+	
+	int xenon_sfc_ReadSmallBlockUser(unsigned char* buf, unsigned int block)
+	{
+		unsigned char PagesInBlock = 32;
+		unsigned char MetaSz = 0x10;
+		unsigned char* tmp = (unsigned char *)vmalloc(MetaSz*PagesInBlock);
+		xenon_sfc_ReadSmallBlockSeparate(buf, tmp, block);
+		vfree(tmp);
+		return 0;
+	}
+	
+	int xenon_sfc_ReadSmallBlockSpare(unsigned char* buf, unsigned int block)
+	{
+		unsigned short BlockSz = 0x4000;
+		unsigned char* tmp = (unsigned char *)vmalloc(BlockSz);
+		xenon_sfc_ReadSmallBlockSeparate(tmp, buf, block);
+		vfree(tmp);
+		return 0;
+	}
+
 	void xenon_sfc_ReadMapData(unsigned char* buf, unsigned int startaddr, unsigned int total_len)
 	{
 		fseek(pFile, startaddr, SEEK_SET);
@@ -132,7 +181,7 @@ static DUMPDATA dumpdata;
 		xe_nand->BlocksCount = xe_nand->SizeDump / xe_nand->BlockSzPhys;
 		xe_nand->PagesCount = xe_nand->BlocksCount * xe_nand->PagesInBlock;
 		
-#ifdef DEBUG
+#if 1
 	printf("Enumerated NAND Information:\n");
 	printf("MetaType: %i\n", xe_nand->MetaType);
 	printf("MMC: %i\n", xe_nand->MMC);
@@ -224,14 +273,16 @@ int fileExists(char* filename)
 void appendBlockToFile(char* filename, unsigned int block, unsigned int len)
 {
 	FILE* outfile;
+	unsigned int fsStartBlock = dumpdata.FSStartBlock<<3;
 	unsigned int offsetUser = block*nand.BlockSz;
 	unsigned char *userbuf = (unsigned char *)vmalloc(nand.BlockSz);
 	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
 
+
 	if(nand.MMC)
 		xenon_sfc_ReadMapData(userbuf, offsetUser, nand.BlockSz); 
 	else
-		xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, block);
+		xenon_sfc_ReadSmallBlockSeparate(userbuf, sparebuf, fsStartBlock + block);
 	
 	if(fileExists(filename))
 		outfile = fopen(filename, "ab+");
@@ -239,48 +290,6 @@ void appendBlockToFile(char* filename, unsigned int block, unsigned int len)
 		outfile = fopen(filename, "wb");
 	fwrite(userbuf, len, 1, outfile);
 	fclose(outfile);
-}
-
-void xenon_nandfs_bb_test(void)
-{
-	unsigned short prev_lba, cur_lba;
-	unsigned int page, block;
-	unsigned char* userbuf = (unsigned char *)vmalloc(nand.BlockSz);
-	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
-	METADATA *meta;
-	
-	for(block=0;block<nand.BlocksCount;block++)
-	{
-		xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, block);
-		meta = (METADATA*)sparebuf;
-#if 0
-		printf("Block: %x - LBA:%x\n",block, dumpdata.LBAMap[block]);
-		printf("Meta:BadBlock %02x\n",meta->bg.BadBlock);
-		printf("Meta:BlockID0 %02x\n",meta->bg.BlockID0);
-		printf("Meta:BlockID1 %02x\n",meta->bg.BlockID1);
-		printf("Meta:FsBlockType %02x\n",meta->bg.FsBlockType);
-		printf("Meta:FsPageCount %02x\n",meta->bg.FsPageCount);
-		printf("Meta:FsSequence0 %02x\n",meta->bg.FsSequence0);
-		printf("Meta:FsSequence1 %02x\n",meta->bg.FsSequence1);
-		printf("Meta:FsSequence2 %02x\n",meta->bg.FsSequence2);
-		printf("Meta:FsSize0 %02x\n",meta->bg.FsSize0);
-		printf("Meta:FsSize1 %02x\n",meta->bg.FsSize1);
-		printf("Meta:FsUnused0 %02x\n",meta->bg.FsUnused0);
-		printf("Meta:FsUnused1 %02x\n",meta->bg.FsUnused1);
-		printf("Meta:FsUnused2 %02x\n",meta->bg.FsUnused2);
-#endif
-		for(page=0;page<nand.PagesInBlock;page++)
-		{
-			meta = (METADATA*)&sparebuf[page*nand.MetaSz];
-			cur_lba = xenon_nandfs_GetLBA(meta);
-			if(cur_lba != prev_lba)
-			{
-//				printk(KERN_INFO "block: 0x%03x, page: %03i, LBA: %04x\n", block, page, cur_lba);
-				prev_lba = cur_lba;
-			}
-		}
-	}
-	
 }
 #endif
 
@@ -466,11 +475,12 @@ bool xenon_nandfs_CheckECC(PAGEDATA* pdata)
 	return 1;
 }
 
-unsigned int xenon_nandfs_ExtractFsEntry(void)
+int xenon_nandfs_ExtractFsEntry(void)
 {
 	unsigned int i, k;
 	unsigned int fsBlock, realBlock;
 	unsigned int fsFileSize;
+	unsigned int fsStartBlock = dumpdata.FSStartBlock<<3; // Convert to Small Block
 //	FS_TIME_STAMP timeSt;
 	
 	dumpdata.pFSRootBufShort = (unsigned short*)dumpdata.FSRootBuf;
@@ -485,51 +495,111 @@ unsigned int xenon_nandfs_ExtractFsEntry(void)
 			{
 				printk(KERN_INFO " ");
 			}
+			
 			fsBlock = __builtin_bswap16(dumpdata.FsEnt[i]->StartCluster);
 			fsFileSize = __builtin_bswap32(dumpdata.FsEnt[i]->ClusterSz);
+			
 			printk(KERN_INFO "start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, (unsigned int)__builtin_bswap32(dumpdata.FsEnt[i]->TypeTime));
 
 			// extract the file
 			if(dumpdata.FsEnt[i]->FileName[0] != 0x5) // file is erased but still in the record
 			{
 				realBlock = fsBlock;
-				while(fsFileSize > nand.BlockSz)
+				if(nand.isBB)
+				{
+					realBlock = ((dumpdata.LBAMap[fsBlock]<<3)-fsStartBlock);
+				}
+				
+				while(fsFileSize > 0x4000)
 				{
 #ifdef DEBUG
-					printk(KERN_INFO "%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
+					printk(KERN_INFO "%04x:%04x, ", fsBlock, realBlock);
 #endif
 #ifdef WRITE_OUT
-					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, nand.BlockSz);
+					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, 0x4000);
 #endif
-					fsFileSize = fsFileSize-nand.BlockSz;
-					fsBlock = __builtin_bswap16(dumpdata.pFSRootBufShort[(fsBlock)]); // gets next block
+					fsFileSize = fsFileSize-0x4000;
+					fsBlock = __builtin_bswap16(dumpdata.pFSRootBufShort[fsBlock]); // gets next block
 					realBlock = dumpdata.LBAMap[fsBlock];
-					realBlock = fsBlock;
+					if(nand.isBB)
+					{
+						realBlock = (realBlock<<3); // to SmallBlock
+						realBlock -= fsStartBlock; // relative Adress
+						realBlock += (fsBlock % 8); // smallBlock inside bigBlock 
+					}
 				}
 				if((fsFileSize > 0)&&(fsBlock<0x1FFE))
 				{
 #ifdef DEBUG
-					printk(KERN_INFO "%04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
+					printk(KERN_INFO "%04x:%04x, ", fsBlock, realBlock);
 #endif
 #ifdef WRITE_OUT
 					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, fsFileSize);
 #endif
 				}
 				else
-					printk(KERN_INFO "** Couldn't write file tail! %04x:%04x, ", fsBlock, dumpdata.LBAMap[fsBlock]);
+					printk(KERN_INFO "** Couldn't write file tail! %04x:%04x, ", fsBlock, realBlock);
 			}
 			else
 				printk(KERN_INFO "   erased still has entry???");		
 			printk(KERN_INFO "\n\n");
 		}
-	}
+	} 
 	return 0;
 }
 
-int xenon_nandfs_SplitFsRootBuf(unsigned char* userbuf)
+int xenon_nandfs_ParseLBA(void)
+{
+	int block, spare;
+	unsigned char* userbuf = (unsigned char *)vmalloc(nand.BlockSz);
+	unsigned char* sparebuf = (unsigned char *)vmalloc(nand.MetaSz*nand.PagesInBlock);
+	int FsStart = dumpdata.FSStartBlock;
+	int FsSize = dumpdata.FSSize;
+	unsigned short lba, lba_cnt=0;
+	METADATA *meta;
+		
+	if(nand.MMC)
+	{
+		for(block=0;block<nand.BlocksCount;block++)
+		{
+			dumpdata.LBAMap[lba_cnt] = block; // Hail to the phison, just this one time
+			lba_cnt++;
+		}
+	}
+	else
+	{
+		for(block=FsStart;block<(FsStart+FsSize);block++)
+		{
+			xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, block);
+			if(nand.isBB)
+			{
+				for(spare=0;spare<(nand.MetaSz*nand.PagesInBlock);spare+=(nand.MetaSz*32))
+				{
+					meta = (METADATA*)&sparebuf[spare]; // 8 SmBlocks inside BgBlock for LBA
+					lba = xenon_nandfs_GetLBA(meta);
+					dumpdata.LBAMap[lba_cnt] = lba;
+					lba_cnt++;
+				}	
+			}
+			else
+			{
+				meta = (METADATA*)sparebuf;
+				lba = xenon_nandfs_GetLBA(meta);
+				dumpdata.LBAMap[lba_cnt] = lba;
+				lba_cnt++;
+			}
+		}
+	}
+	printk(KERN_INFO "Read 0x%x LBA entries\n",lba_cnt);
+	return 0;
+}
+
+int xenon_nandfs_SplitFsRootBuf(int block)
 {
 	unsigned int i, j, root_off, file_off, ttl_off;
-	unsigned char* data = userbuf;
+	unsigned char* data = (unsigned char *)vmalloc(nand.BlockSz);
+	
+	xenon_sfc_ReadBlockUser(data, block);
 	
 	root_off = 0;
 	file_off = 0;
@@ -550,15 +620,13 @@ int xenon_nandfs_SplitFsRootBuf(unsigned char* userbuf)
 	writeToFile("fsrootbuf.bin", dumpdata.FSRootBuf, FSROOT_SIZE);
 	writeToFile("fsrootfilebuf.bin", dumpdata.FSRootFileBuf, FSROOT_SIZE);
 #endif
-
-	xenon_nandfs_ExtractFsEntry();
 	return 0;
 }
 
 bool xenon_nandfs_init(void)
 {
 	unsigned char mobi, fsroot_ident;
-	unsigned int i, j, mmc_anchor_blk, prev_mobi_ver, prev_fsroot_ver, tmp_ver, lba, blk, size = 0, page_each;
+	unsigned int i, j, mmc_anchor_blk, prev_mobi_ver, prev_fsroot_ver, tmp_ver, blk, size = 0, page_each;
 	bool ret = false;
 	unsigned char anchor_num = 0;
 	char mobileName[] = {"MobileA"};
@@ -567,12 +635,8 @@ bool xenon_nandfs_init(void)
 	if(nand.MMC)
 	{
 		unsigned char* blockbuf = (unsigned char *)vmalloc(nand.BlockSz * 2);
-		unsigned char* fsrootbuf = (unsigned char *)vmalloc(nand.BlockSz);
 		mmc_anchor_blk = nand.ConfigBlock - MMC_ANCHOR_BLOCKS;
 		prev_mobi_ver = 0;
-		
-		for(blk=0;blk<nand.BlocksCount;blk++) // Create LBA map
-			dumpdata.LBAMap[blk] = blk; // Hail to the phison, just this one time
 		
 		xenon_sfc_ReadMapData(blockbuf, (mmc_anchor_blk * nand.BlockSz), (nand.BlockSz * 2));
 		
@@ -605,8 +669,6 @@ bool xenon_nandfs_init(void)
 			if(mobi == MOBILE_FSROOT)
 			{
 				printk(KERN_INFO "FSRoot found at block 0x%x (off: 0x%x), v %i, size %d (0x%x) bytes\n", blk, (blk*nand.BlockSz), prev_mobi_ver, nand.BlockSz, nand.BlockSz);
-				xenon_sfc_ReadMapData(fsrootbuf, blk*nand.BlockSz, nand.BlockSz);
-				xenon_nandfs_SplitFsRootBuf(fsrootbuf);
 				dumpdata.FSRootBlock = blk;
 				dumpdata.FSRootVer = prev_mobi_ver; // anchor version
 				ret  = true;
@@ -621,7 +683,6 @@ bool xenon_nandfs_init(void)
 			}
 		}
 		vfree(blockbuf);
-		vfree(fsrootbuf);
 	}
 	else
 	{
@@ -637,13 +698,10 @@ bool xenon_nandfs_init(void)
 		{
 			xenon_sfc_ReadBlockSeparate(userbuf, sparebuf, blk);
 			meta = (METADATA*)sparebuf;
-
-			lba = xenon_nandfs_GetLBA(meta);
-			dumpdata.LBAMap[blk] = lba; // Create LBA map
 			
 			mobi = xenon_nandfs_GetBlockType(meta);
 			tmp_ver = xenon_nandfs_GetFsSequence(meta);
-				
+
 			if(mobi == fsroot_ident) // fs root
 			{
 				prev_fsroot_ver = dumpdata.FSRootVer; // get current version
@@ -656,7 +714,20 @@ bool xenon_nandfs_init(void)
 					continue;
 					
 				printk(KERN_INFO "FSRoot found at block 0x%x (off: 0x%x), v %i, size %d (0x%x) bytes\n", blk, (blk*nand.BlockSzPhys), dumpdata.FSRootVer, nand.BlockSz, nand.BlockSz);
-				xenon_nandfs_SplitFsRootBuf(userbuf);
+				
+				if(nand.isBB)
+				{
+					dumpdata.MUStart = meta->bg.FsSize1;
+					dumpdata.FSSize = (meta->bg.FsSize0<<2);
+					dumpdata.FSStartBlock = nand.SizeUsableFs - meta->bg.FsPageCount - dumpdata.FSSize;
+				}
+				else
+				{
+					dumpdata.MUStart = 0;
+					dumpdata.FSSize = nand.BlocksCount;
+					dumpdata.FSStartBlock = 0;
+				}
+				
 				ret = true;
 			}
 			else if((mobi >= MOBILE_BASE) && (mobi < MOBILE_END)) //Mobile*.dat
@@ -668,13 +739,13 @@ bool xenon_nandfs_init(void)
 					continue;
 
 				page_each = nand.PagesInBlock - xenon_nandfs_GetFsFreepages(meta);
-				//printf("pageEach: %x\n", pageEach);
+				//printk(KERN_INFO "pageEach: %x\n", pageEach);
 				// find the most recent instance in the block and dump it
 				j = 0;
 				for(i=0; i < nand.PagesInBlock; i += page_each)
 				{
 					meta = (METADATA*)&sparebuf[nand.MetaSz*i];
-					//printf("i: %d type: %x\n", i, meta->FsBlockType);
+					//printk(KERN_INFO "i: %d type: %x\n", i, meta->FsBlockType);
 					if(xenon_nandfs_GetBlockType(meta) == (mobi))
 						j = i;
 					if(xenon_nandfs_GetBlockType(meta) == 0x3F)
@@ -701,8 +772,8 @@ bool xenon_nandfs_init_one(void)
 {
 	xenon_sfc_GetNandStruct(&nand);
 	xenon_nandfs_init();
-#ifdef DEBUG
-	xenon_nandfs_bb_test();
-#endif
+	xenon_nandfs_ParseLBA();
+	xenon_nandfs_SplitFsRootBuf(dumpdata.FSRootBlock);
+	xenon_nandfs_ExtractFsEntry();
 	return true;
 }

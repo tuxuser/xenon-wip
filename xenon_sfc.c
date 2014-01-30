@@ -271,10 +271,105 @@ int xenon_sfc_ReadBlock(unsigned char* buf, unsigned int block)
 	return 0;
 }
 
+int xenon_sfc_ReadSmallBlock(unsigned char* buf, unsigned int block)
+{
+	int i, status, block_read;
+	// hardcoding these for big block nand-type
+	unsigned int BlockSz = 0x4000;
+	unsigned int BlockSzPhys = 0x4200;
+	unsigned short PageSz = 0x200;
+	unsigned short PageSzPhys = 0x210;
+	unsigned char MetaSz = 0x10;
+	unsigned char PagesInBlock = 32;
+	int addr = block * BlockSz;
+	unsigned char* data = buf;
+	unsigned int cur_addr = addr;
+	
+	if(buf != NULL)
+		memset(data, 0, (PagesInBlock*PageSzPhys));
+
+	for(block_read = 0; block_read < BlockSzPhys; block_read += 0x2000, cur_addr += 0x2000)
+	{
+		xenon_sfc_WriteReg(SFCX_STATUS, xenon_sfc_ReadReg(SFCX_STATUS));
+		xenon_sfc_WriteReg(SFCX_DATAPHYADDR, sfc.dmaaddr);
+		xenon_sfc_WriteReg(SFCX_SPAREPHYADDR, sfc.dmaaddr+0xC000);
+		xenon_sfc_WriteReg(SFCX_ADDRESS, cur_addr);
+		xenon_sfc_WriteReg(SFCX_COMMAND, DMA_PHY_TO_RAM);
+		
+		while(xenon_sfc_ReadReg(SFCX_STATUS) & STATUS_BUSY);
+		
+		status = xenon_sfc_ReadReg(SFCX_STATUS);
+		if(status&STATUS_ERROR)
+		{
+			printk(KERN_INFO "error in status, %08x\n", status);
+			if(status&STATUS_BB_ER)
+			{
+				printk(KERN_INFO "Bad block error block 0x%x\n", block);
+				return 1;
+			}
+			if(STSCHK_ECC_ERR(status))
+			{
+				printk(KERN_INFO "unrecoverable ECC error block 0x%x\n", block);
+				return 2;
+			}
+		}
+		if(buf != NULL)
+		{
+			for(i = 0; i < 16; i++)
+			{
+				memcpy(data, &sfc.dmabuf[i*PageSz], PageSz);
+				memcpy(&data[PageSz], &sfc.dmabuf[0xC000+(i*MetaSz)], MetaSz);
+				data += PageSzPhys;
+			}
+		}
+	}
+	return 0;
+}
+
 int xenon_sfc_ReadBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block)
 {
 	int config, wconfig, i;
 	unsigned char* data = (unsigned char *)vmalloc(sfc.nand.BlockSzPhys);
+	
+	if(user && spare)
+	{
+		config = xenon_sfc_ReadReg(SFCX_CONFIG);
+		wconfig = (config&~(CONFIG_DMA_LEN|CONFIG_INT_EN|CONFIG_WP_EN));
+		if(sfc.nand.isBB)
+			wconfig = wconfig|CONFIG_DMA_PAGES(4); // change to 4 pages, bb 4 pages = 16 small pages
+		else
+			wconfig = wconfig|CONFIG_DMA_PAGES(16); // change to 16 pages
+		xenon_sfc_WriteReg(SFCX_CONFIG, wconfig);
+
+// 		printk(KERN_INFO "Reading block %x of %x at block %x (%x)\n", blk, block_cnt, blk+block, (blk+block)*sfc.nand.BlockSzPhys);
+		xenon_sfc_ReadSmallBlock(data, block);
+
+		xenon_sfc_WriteReg(SFCX_CONFIG, config);
+	}
+	else
+		printk(KERN_INFO "supplied buffers weren't allocated for readblock_separate\n");
+	
+	for(i = 0; i < sfc.nand.PagesInBlock; i++)
+	{
+		memcpy(user, &data[i*sfc.nand.PageSzPhys], sfc.nand.PageSz);
+		memcpy(spare, &data[(i*sfc.nand.PageSzPhys)+sfc.nand.PageSz], sfc.nand.MetaSz); 
+		user += sfc.nand.PageSz;
+		spare += sfc.nand.MetaSz;
+	}
+	vfree(data);
+	
+	return 0;	
+}
+
+int xenon_sfc_ReadSmallBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block)
+{
+	int config, wconfig, i;
+	unsigned int BlockSzPhys = 0x4200;
+	unsigned short PageSz = 0x200;
+	unsigned short PageSzPhys = 0x210;
+	unsigned char MetaSz = 0x10;
+	unsigned char PagesInBlock = 32;
+	unsigned char* data = (unsigned char *)vmalloc(BlockSzPhys);
 	
 	if(user && spare)
 	{
@@ -294,12 +389,12 @@ int xenon_sfc_ReadBlockSeparate(unsigned char* user, unsigned char* spare, unsig
 	else
 		printk(KERN_INFO "supplied buffers weren't allocated for readblock_separate\n");
 	
-	for(i = 0; i < sfc.nand.PagesInBlock; i++)
+	for(i = 0; i < PagesInBlock; i++)
 	{
-		memcpy(user, &data[i*sfc.nand.PageSzPhys], sfc.nand.PageSz);
-		memcpy(spare, &data[(i*sfc.nand.PageSzPhys)+sfc.nand.PageSz], sfc.nand.MetaSz); 
-		user += sfc.nand.PageSz;
-		spare += sfc.nand.MetaSz;
+		memcpy(user, &data[i*PageSzPhys], PageSz);
+		memcpy(spare, &data[(i*PageSzPhys)+PageSz], MetaSz); 
+		user += PageSz;
+		spare += MetaSz;
 	}
 	vfree(data);
 	
@@ -318,6 +413,25 @@ int xenon_sfc_ReadBlockSpare(unsigned char* buf, unsigned int block)
 {
 	unsigned char* tmp = (unsigned char *)vmalloc(sfc.nand.BlockSz);
 	xenon_sfc_ReadBlockSeparate(tmp, buf, block);
+	vfree(tmp);
+	return 0;
+}
+
+int xenon_sfc_ReadSmallBlockUser(unsigned char* buf, unsigned int block)
+{
+	unsigned char PagesInBlock = 32;
+	unsigned char MetaSz = 0x10;
+	unsigned char* tmp = (unsigned char *)vmalloc(MetaSz*PagesInBlock);
+	xenon_sfc_ReadSmallBlockSeparate(buf, tmp, block);
+	vfree(tmp);
+	return 0;
+}
+
+int xenon_sfc_ReadSmallBlockSpare(unsigned char* buf, unsigned int block)
+{
+	unsigned short BlockSz = 0x4000;
+	unsigned char* tmp = (unsigned char *)vmalloc(BlockSz);
+	xenon_sfc_ReadSmallBlockSeparate(tmp, buf, block);
 	vfree(tmp);
 	return 0;
 }
