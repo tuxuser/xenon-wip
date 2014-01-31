@@ -184,7 +184,7 @@ static DUMPDATA dumpdata;
 				break;
 		}
 		xe_nand->ConfigBlock = xe_nand->SizeUsableFs - CONFIG_BLOCKS;
-		xe_nand->BlocksCount = xe_nand->SizeDump / xe_nand->BlockSzPhys;
+		xe_nand->BlocksCount = xe_nand->SizeData / xe_nand->BlockSz;
 		xe_nand->PagesCount = xe_nand->BlocksCount * xe_nand->PagesInBlock;
 		
 #if 1
@@ -615,7 +615,10 @@ int xenon_nandfs_SplitFsRootBuf()
 	unsigned int i, j, root_off, file_off, ttl_off;
 	unsigned char* data = (unsigned char *)vmalloc(nand.BlockSz);
 	
-	xenon_sfc_ReadBlockUser(data, block);
+	if(nand.MMC)
+		xenon_sfc_ReadMapData(data, (block*nand.BlockSz), nand.BlockSz);
+	else
+		xenon_sfc_ReadBlockUser(data, block);
 	
 	root_off = 0;
 	file_off = 0;
