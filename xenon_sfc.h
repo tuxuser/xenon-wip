@@ -101,6 +101,7 @@
 
 typedef struct _xenon_nand
 {
+	bool init;
 	bool isBBCont;
 	bool isBB;
 	bool MMC;
@@ -150,7 +151,7 @@ int xenon_sfc_EraseBlocks(unsigned int block, unsigned int block_cnt);
 
 void xenon_sfc_ReadMapData(unsigned char* buf, unsigned int startaddr, unsigned int total_len);
 
-void xenon_sfc_GetNandStruct(xenon_nand* xe_nand);
+bool xenon_sfc_GetNandStruct(xenon_nand* xe_nand);
 
 
 #endif

@@ -148,7 +148,7 @@ unsigned short xenon_nandfs_GetMMCMobileSize(unsigned char* buf, unsigned char m
 bool xenon_nandfs_CheckECC(PAGEDATA* pdata);
 int xenon_nandfs_ExtractFsEntry(void);
 int xenon_nandfs_ParseLBA(void);
-int xenon_nandfs_SplitFsRootBuf(int block);
+int xenon_nandfs_SplitFsRootBuf(void);
 bool xenon_nandfs_init(void);
 bool xenon_nandfs_init_one(void);
 

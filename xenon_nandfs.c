@@ -57,7 +57,7 @@ static DUMPDATA dumpdata;
 	int xenon_sfc_ReadBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block)
 	{
 		unsigned short i;
-		unsigned char* buf = malloc(nand.BlockSzPhys);
+		unsigned char* buf = (unsigned char*)vmalloc(nand.BlockSzPhys);
 		unsigned int addr = block * nand.BlockSzPhys;
 		//printf("Reading block %04x from addr %08x\n", block, addr);
 		fseek(pFile, addr, SEEK_SET);
@@ -66,12 +66,13 @@ static DUMPDATA dumpdata;
 			memcpy(&user[i*nand.PageSz], &buf[i*nand.PageSzPhys], nand.PageSz);
 			memcpy(&spare[i*nand.MetaSz], &buf[(i*nand.PageSzPhys)+nand.PageSz], nand.MetaSz);
 		}
+		vfree(buf);
 	}
 	
 	int xenon_sfc_ReadSmallBlockSeparate(unsigned char* user, unsigned char* spare, unsigned int block)
 	{
 		unsigned short i;
-		unsigned char* buf = malloc(0x4200);
+		unsigned char* buf = (unsigned char*)vmalloc(0x4200);
 		unsigned int addr = block * 0x4200;
 		//printf("Reading block %04x from addr %08x\n", block, addr);
 		fseek(pFile, addr, SEEK_SET);
@@ -80,6 +81,7 @@ static DUMPDATA dumpdata;
 			memcpy(&user[i*0x200], &buf[i*0x210], 0x200);
 			memcpy(&spare[i*0x10], &buf[(i*0x210)+0x200], 0x10);
 		}
+		vfree(buf);
 	}
 
 	int xenon_sfc_ReadBlockUser(unsigned char* buf, unsigned int block)
@@ -123,7 +125,7 @@ static DUMPDATA dumpdata;
 		fread(buf, total_len, 1, pFile);
 	}
 	
-	void xenon_sfc_GetNandStruct(xenon_nand* xe_nand)
+	bool xenon_sfc_GetNandStruct(xenon_nand* xe_nand)
 	{	
 		xe_nand->PagesInBlock = 32;
 		xe_nand->MetaSz = 0x10;
@@ -139,12 +141,14 @@ static DUMPDATA dumpdata;
 		switch(fixed_type)
 		{
 			case META_TYPE_SM:
+					xe_nand->init = true;
 					xe_nand->SizeDump = 0x1080000;
 					xe_nand->SizeData = 0x1000000;
 					xe_nand->SizeSpare = 0x80000;
 					xe_nand->SizeUsableFs = 0x3E0;
 					break;
 			case META_TYPE_BOS:
+					xe_nand->init = true;
 					xe_nand->MetaType = META_TYPE_BOS;
 					xe_nand->isBBCont = true;
 					xe_nand->SizeDump = 0x1080000;
@@ -153,6 +157,7 @@ static DUMPDATA dumpdata;
 					xe_nand->SizeUsableFs = 0x3E0;
 					break;
 			case META_TYPE_BG:
+					xe_nand->init = true;
 					xe_nand->MetaType = META_TYPE_BG;
 					xe_nand->isBBCont = true;
 					xe_nand->isBB = true;
@@ -165,6 +170,7 @@ static DUMPDATA dumpdata;
 					xe_nand->SizeUsableFs = 0x1E0;
 					break;
 			case META_TYPE_NONE:
+					xe_nand->init = true;
 					xe_nand->MMC = true;
 					xe_nand->MetaType = META_TYPE_NONE;
 					xe_nand->BlockSz = 0x4000;
@@ -202,6 +208,7 @@ static DUMPDATA dumpdata;
 	printf("PagesCount: 0x%x\n", xe_nand->PagesCount);
 	printf("\n\n\n");
 #endif
+		return xe_nand->init;
 	}
 	
 	int main(int argc, char *argv[])
@@ -290,6 +297,9 @@ void appendBlockToFile(char* filename, unsigned int block, unsigned int len)
 		outfile = fopen(filename, "wb");
 	fwrite(userbuf, len, 1, outfile);
 	fclose(outfile);
+	
+	vfree(userbuf);
+	vfree(sparebuf);
 }
 #endif
 
@@ -470,7 +480,10 @@ bool xenon_nandfs_CheckECC(PAGEDATA* pdata)
 {
 	unsigned char ecd[4];
 	xenon_nandfs_CalcECC((unsigned int*)pdata->User, ecd);
-	if ((ecd[0] == pdata->Meta.sm.ECC0) && (ecd[1] == pdata->Meta.sm.ECC1) && (ecd[2] == pdata->Meta.sm.ECC2) && (ecd[3] == pdata->Meta.sm.ECC3))
+	if ((ecd[0] == pdata->Meta.sm.ECC0) &&
+		(ecd[1] == pdata->Meta.sm.ECC1) &&
+		(ecd[2] == pdata->Meta.sm.ECC2) &&
+		(ecd[3] == pdata->Meta.sm.ECC3))
 		return 0;
 	return 1;
 }
@@ -591,11 +604,14 @@ int xenon_nandfs_ParseLBA(void)
 		}
 	}
 	printk(KERN_INFO "Read 0x%x LBA entries\n",lba_cnt);
+	vfree(userbuf);
+	vfree(sparebuf);
 	return 0;
 }
 
-int xenon_nandfs_SplitFsRootBuf(int block)
+int xenon_nandfs_SplitFsRootBuf()
 {
+	int block = dumpdata.FSRootBlock;
 	unsigned int i, j, root_off, file_off, ttl_off;
 	unsigned char* data = (unsigned char *)vmalloc(nand.BlockSz);
 	
@@ -620,6 +636,7 @@ int xenon_nandfs_SplitFsRootBuf(int block)
 	writeToFile("fsrootbuf.bin", dumpdata.FSRootBuf, FSROOT_SIZE);
 	writeToFile("fsrootfilebuf.bin", dumpdata.FSRootFileBuf, FSROOT_SIZE);
 #endif
+	vfree(data);
 	return 0;
 }
 
@@ -770,10 +787,29 @@ bool xenon_nandfs_init(void)
 
 bool xenon_nandfs_init_one(void)
 {
-	xenon_sfc_GetNandStruct(&nand);
-	xenon_nandfs_init();
+	int ret;
+	
+	ret = xenon_sfc_GetNandStruct(&nand);
+	if(!ret)
+	{
+		printk(KERN_INFO "Failed to get enumerated NAND information\n");
+		goto err_out;
+	}
+	
+	ret = xenon_nandfs_init();
+	if(!ret)
+	{
+		printk(KERN_INFO "FSRoot wasn't found\n");
+		goto err_out;
+	}
+	
 	xenon_nandfs_ParseLBA();
-	xenon_nandfs_SplitFsRootBuf(dumpdata.FSRootBlock);
+	xenon_nandfs_SplitFsRootBuf();
 	xenon_nandfs_ExtractFsEntry();
 	return true;
+	
+	err_out:
+		memset (&nand, 0, sizeof(DUMPDATA));
+		memset (&dumpdata, 0, sizeof(xenon_nand));
+		return false;
 }

@@ -770,13 +770,14 @@ int xenon_sfc_ReadFullFlash(unsigned char* buf)
 	return 0;
 }
 
-void xenon_sfc_GetNandStruct(xenon_nand* xe_nand)
+bool xenon_sfc_GetNandStruct(xenon_nand* xe_nand)
 {
 	xe_nand = &sfc.nand;
+	return xe_nand->init;
 }
 
 
-static int _xenon_sfc_enum_nand(void)
+static bool _xenon_sfc_enum_nand(void)
 {
 	int config;
 	u64 eMMC;
@@ -788,12 +789,13 @@ static int _xenon_sfc_enum_nand(void)
 	
 	eMMC = xenon_sfc_ReadReg(SFCX_MMC_IDENT);
 	if (eMMC != 0)
-		sfc.nand.MMC = 1;
+		sfc.nand.MMC = true;
 	else
-		sfc.nand.MMC = 0;
+		sfc.nand.MMC = false;
 
 	if(sfc.nand.MMC) // corona MMC
 	{
+		sfc.nand.init = true;
 		sfc.nand.MetaType = META_TYPE_NONE;
 		sfc.nand.BlockSz = 0x4000;
 		sfc.nand.BlockSzPhys = 0x20000;
@@ -816,8 +818,8 @@ static int _xenon_sfc_enum_nand(void)
 		sfc.nand.MetaType = META_TYPE_SM;
 		sfc.nand.BlockSz = 0x4000;
 		sfc.nand.BlockSzPhys = 0x4200;
-		sfc.nand.isBB = 0;
-		sfc.nand.isBBCont = 0;
+		sfc.nand.isBB = false;
+		sfc.nand.isBBCont = false;
 
 #ifdef DEBUG_OUT
 		printk(KERN_INFO "SFC config %08x ver: %d type: %d\n", config, ((config>>17)&3), ((config >> 4) & 0x3));
@@ -834,6 +836,7 @@ static int _xenon_sfc_enum_nand(void)
 // 						sfc.nand.SizeSpare = 0x40000;
 // 						break;
 					case 1: // 16MB
+						sfc.nand.init = true;
 						sfc.nand.SizeDump = 0x1080000;
 						sfc.nand.SizeData = 0x1000000;
 						sfc.nand.SizeSpare = 0x80000;
@@ -846,6 +849,7 @@ static int _xenon_sfc_enum_nand(void)
 						sfc.nand.SizeUsableFs = 0x7C0;
 // 						break;
 					case 3: // 64MB
+						sfc.nand.init = true;
 						sfc.nand.SizeDump = 0x4200000;
 						sfc.nand.SizeData = 0x4000000;
 						sfc.nand.SizeSpare = 0x200000;
@@ -853,24 +857,25 @@ static int _xenon_sfc_enum_nand(void)
 						break;
 					default:
 						printk(KERN_INFO "unknown T%i NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
-						return 0;
 				}
 				break;
 			case 1: // big block flash controller
 				switch ((config >> 4) & 0x3)// TODO: FIND OUT FOR 64M!!! IF THERE IS ONE!!!
 				{
 					case 1: // Small block 16MB setup
+						sfc.nand.init = true;
 						sfc.nand.MetaType = META_TYPE_BOS;
-						sfc.nand.isBBCont = 1;
+						sfc.nand.isBBCont = true;
 						sfc.nand.SizeDump = 0x1080000;
 						sfc.nand.SizeData = 0x1000000;
 						sfc.nand.SizeSpare = 0x80000;
 						sfc.nand.SizeUsableFs = 0x3E0;
 						break;
 					case 2: // Large Block: Current Jasper 256MB and 512MB
+						sfc.nand.init = true;
 						sfc.nand.MetaType = META_TYPE_BG;
-						sfc.nand.isBBCont = 1;
-						sfc.nand.isBB = 1;
+						sfc.nand.isBBCont = true;
+						sfc.nand.isBB = true;
 						sfc.nand.SizeDump = 0x4200000;
 						sfc.nand.BlockSzPhys = 0x21000;
 						sfc.nand.SizeData = 0x4000000;
@@ -881,13 +886,13 @@ static int _xenon_sfc_enum_nand(void)
 						break;
 					default:
 						printk(KERN_INFO "unknown T%i NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
-						return 0;
 				}
 				break;
 			case 2: // MMC capable big block flash controller ie: 16M corona 000431c4
 				switch ((config >> 4) & 0x3) 
 				{
 					case 0: // 16M
+						sfc.nand.init = 1;
 						sfc.nand.MetaType = META_TYPE_BOS;
 						sfc.nand.isBBCont = 1;
 						sfc.nand.SizeDump = 0x1080000;
@@ -896,6 +901,7 @@ static int _xenon_sfc_enum_nand(void)
 						sfc.nand.SizeUsableFs = 0x3E0;
 						break;
 					case 1: // 64M
+						sfc.nand.init = 1;
 						sfc.nand.MetaType = META_TYPE_BOS;
 						sfc.nand.isBBCont = 1;
 						sfc.nand.SizeDump = 0x4200000;
@@ -904,6 +910,7 @@ static int _xenon_sfc_enum_nand(void)
 						sfc.nand.SizeUsableFs = 0xF80;
 						break;
 					case 2: // Big Block
+						sfc.nand.init = 1;
 						sfc.nand.MetaType = META_TYPE_BG;
 						sfc.nand.isBBCont = 1;
 						sfc.nand.isBB = 1;
@@ -919,12 +926,10 @@ static int _xenon_sfc_enum_nand(void)
 					//	break;
 					default:
 						printk(KERN_INFO "unknown T%i NAND size! (%x)\n", ((config >> 4) & 0x3), (config >> 4) & 0x3);
-						return 0;
 				}
 				break;
 			default:
 				printk(KERN_INFO "unknown NAND type! (%x)\n", (config>>17)&3);
-				return 0;
 		}
 	}
 
@@ -942,7 +947,7 @@ static int _xenon_sfc_enum_nand(void)
 	printk(KERN_INFO "PagesInBlock  : 0x%x\n", sfc.nand.PagesInBlock);
 	printk(KERN_INFO "SizeWrite    : 0x%x\n", sfc.nand.SizeWrite);
 #endif
-	return 1;
+	return sfc.nand.init;
 }
 
 static int _xenon_sfc_init_one (struct pci_dev *pdev, const struct pci_device_id *ent)
@@ -980,7 +985,9 @@ static int _xenon_sfc_init_one (struct pci_dev *pdev, const struct pci_device_id
 	init_waitqueue_head(&sfc.wait_q);
 	spin_lock_init(&sfc.fifo_lock);
 	
-	if(_xenon_sfc_enum_nand() != 1) {
+	rc = _xenon_sfc_enum_nand();
+	if(!rc)
+	{
 		printk(KERN_INFO "NAND Enumeration failed!\n");
 		goto err_out_ioremap_map;
 	}
