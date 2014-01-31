@@ -337,7 +337,7 @@ unsigned short xenon_nandfs_GetLBA(METADATA* meta)
 			ret =  (((meta->sm.BlockID0&0xF)<<8)+(meta->sm.BlockID1));
 			break;
 		case META_TYPE_BOS:
-			ret =  (((meta->bos.BlockID0<<8)&0xF)+(meta->bos.BlockID1&0xFF));
+			ret =  (((meta->bos.BlockID0&0xF)<<8)+(meta->bos.BlockID1&0xFF));
 			break;
 		case META_TYPE_BG:
 			ret =  (((meta->bg.BlockID0&0xF)<<8)+(meta->bg.BlockID1&0xFF));
