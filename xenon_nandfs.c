@@ -445,14 +445,14 @@ unsigned short xenon_nandfs_GetMMCMobileBlock(unsigned char* buf, unsigned char 
 {
 	unsigned char mob = mobi - MOBILE_BASE;
 	unsigned char offset = MMC_ANCHOR_MOBI_START + (mob * MMC_ANCHOR_MOBI_SIZE);
-	return buf[offset] << 8 | buf[offset + 1];
+	return (buf[offset] << 8 | buf[offset + 1]);
 }
 
 unsigned short xenon_nandfs_GetMMCMobileSize(unsigned char* buf, unsigned char mobi)
 {
 	unsigned char mob = mobi - MOBILE_BASE;
 	unsigned char offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x2;
-	return buf[offset] | (buf[offset + 1] << 8);
+	return (buf[offset] | (buf[offset + 1] << 8));
 }
 
 bool xenon_nandfs_CheckECC(PAGEDATA* pdata)
