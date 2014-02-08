@@ -329,116 +329,104 @@ void xenon_nandfs_CalcECC(unsigned int *data, unsigned char* edc) {
 
 unsigned short xenon_nandfs_GetLBA(METADATA* meta)
 {
-	unsigned short ret = 0;
-	
 	switch (nand.MetaType)
 	{
 		case META_TYPE_SM:
-			ret =  (((meta->sm.BlockID0&0xF)<<8)+(meta->sm.BlockID1));
+			return (((meta->sm.BlockID0 & 0xF) << 8) | meta->sm.BlockID1);
 			break;
 		case META_TYPE_BOS:
-			ret =  (((meta->bos.BlockID0&0xF)<<8)+(meta->bos.BlockID1&0xFF));
+			return (((meta->bos.BlockID0 & 0xF) << 8) | meta->bos.BlockID1);
 			break;
 		case META_TYPE_BG:
-			ret =  (((meta->bg.BlockID0&0xF)<<8)+(meta->bg.BlockID1&0xFF));
+			return (((meta->bg.BlockID0 & 0xF) << 8) | meta->bg.BlockID1);
 			break;
 	}
-	return ret;
+	return 0;
 }
 
 unsigned char xenon_nandfs_GetBlockType(METADATA* meta)
 {
-	unsigned char ret = 0;
-	
 	switch (nand.MetaType)
 	{
 		case META_TYPE_SM:
-			ret =  (meta->sm.FsBlockType&0x3F);
+			return (meta->sm.FsBlockType & 0x3F);
 			break;
 		case META_TYPE_BOS:
-			ret =  (meta->bos.FsBlockType&0x3F);
+			return (meta->bos.FsBlockType & 0x3F);
 			break;
 		case META_TYPE_BG:
-			ret =  (meta->bg.FsBlockType&0x3F);
+			return (meta->bg.FsBlockType & 0x3F);
 			break;
 	}
-	return ret;
+	return 0;
 }
 
 unsigned char xenon_nandfs_GetBadBlockMark(METADATA* meta)
 {
-	unsigned char ret = 0;
-	
 	switch (nand.MetaType)
 	{
 		case META_TYPE_SM:
-			ret =  meta->sm.BadBlock;
+			return meta->sm.BadBlock;
 			break;
 		case META_TYPE_BOS:
-			ret =  meta->bos.BadBlock;
+			return meta->bos.BadBlock;
 			break;
 		case META_TYPE_BG:
-			ret =  meta->bg.BadBlock;
+			return meta->bg.BadBlock;
 			break;
 	}
-	return ret;
+	return 0;
 }
 
 unsigned int xenon_nandfs_GetFsSize(METADATA* meta)
 {
-	unsigned int ret = 0;
-	
 	switch (nand.MetaType)
 	{
 		case META_TYPE_SM:
-			ret = ((meta->sm.FsSize0<<8)+meta->sm.FsSize1);
+			return ((meta->sm.FsSize0 << 8) | meta->sm.FsSize1);
 			break;
 		case META_TYPE_BOS:
-			ret = (((meta->bos.FsSize0<<8)&0xFF)+(meta->bos.FsSize1&0xFF));
+			return ((meta->bos.FsSize0 << 8) | meta->bos.FsSize1);
 			break;
 		case META_TYPE_BG:
-			ret = (((meta->bg.FsSize0&0xFF)<<8)+(meta->bg.FsSize1&0xFF));
+			return ((meta->bg.FsSize0 << 8) |  meta->bg.FsSize1);
 			break;
 	}
-	return ret;
+	return 0;
 }
 
 unsigned int xenon_nandfs_GetFsFreepages(METADATA* meta)
 {
-	unsigned int ret = 0;
-	
 	switch (nand.MetaType)
 	{
 		case META_TYPE_SM:
-			ret =  meta->sm.FsPageCount;
+			return meta->sm.FsPageCount;
 			break;
 		case META_TYPE_BOS:
-			ret =  meta->bos.FsPageCount;
+			return meta->bos.FsPageCount;
 			break;
 		case META_TYPE_BG:
-			ret =  (meta->bg.FsPageCount * 4);
+			return (meta->bg.FsPageCount * 4);
 			break;
 	}
-	return ret;
+	return 0;
 }
 
 unsigned int xenon_nandfs_GetFsSequence(METADATA* meta)
 {
-	unsigned int ret = 0;
-	
 	switch (nand.MetaType)
 	{
 		case META_TYPE_SM:
-			ret =  (meta->sm.FsSequence0+(meta->sm.FsSequence1<<8)+(meta->sm.FsSequence2<<16));
+			return (meta->sm.FsSequence0 | (meta->sm.FsSequence1 << 8) | (meta->sm.FsSequence2 << 16) | (meta->sm.FsSequence3 << 24));
 			break;
 		case META_TYPE_BOS:
-			ret =  (meta->bos.FsSequence0+(meta->bos.FsSequence1<<8)+(meta->bos.FsSequence2<<16));
+			return (meta->bos.FsSequence0 | (meta->bos.FsSequence1 << 8) | (meta->bos.FsSequence2 << 16) | (meta->sm.FsSequence3 << 24));
 			break;
 		case META_TYPE_BG:
-			ret =  (meta->bg.FsSequence0+(meta->bg.FsSequence1<<8)+(meta->bg.FsSequence2<<16));
+			return (meta->bg.FsSequence0 | (meta->bg.FsSequence1 << 8) | (meta->bg.FsSequence2 << 16));
 			break;
 	}
-	return ret;
+	return 0;
 }
 
 bool xenon_nandfs_CheckMMCAnchorSha(unsigned char* buf)
@@ -450,30 +438,21 @@ bool xenon_nandfs_CheckMMCAnchorSha(unsigned char* buf)
 
 unsigned short xenon_nandfs_GetMMCAnchorVer(unsigned char* buf)
 {
-	unsigned char* data = buf;
-	unsigned short tmp = (data[MMC_ANCHOR_VERSION_POS]<<8|data[MMC_ANCHOR_VERSION_POS+1]);
-
-	return tmp;
+	return (buf[MMC_ANCHOR_VERSION_POS] << 8 | buf[MMC_ANCHOR_VERSION_POS + 1]);
 }
 
 unsigned short xenon_nandfs_GetMMCMobileBlock(unsigned char* buf, unsigned char mobi)
 {
-	unsigned char* data = buf;
 	unsigned char mob = mobi - MOBILE_BASE;
-	unsigned char offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE);
-	unsigned short tmp = data[offset]<<8|data[offset+1];
-	
-	return tmp;
+	unsigned char offset = MMC_ANCHOR_MOBI_START + (mob * MMC_ANCHOR_MOBI_SIZE);
+	return buf[offset] << 8 | buf[offset + 1];
 }
 
 unsigned short xenon_nandfs_GetMMCMobileSize(unsigned char* buf, unsigned char mobi)
 {
-	unsigned char* data = buf;
 	unsigned char mob = mobi - MOBILE_BASE;
 	unsigned char offset = MMC_ANCHOR_MOBI_START+(mob*MMC_ANCHOR_MOBI_SIZE)+0x2;
-	unsigned short tmp = data[offset]<<8|data[offset+1];
-	
-	return __builtin_bswap16(tmp);
+	return buf[offset] | (buf[offset + 1] << 8);
 }
 
 bool xenon_nandfs_CheckECC(PAGEDATA* pdata)
