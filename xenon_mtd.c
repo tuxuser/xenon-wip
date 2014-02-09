@@ -44,112 +44,59 @@ static const char xenonflash_name[] = "Xenon FLASH";
 static const char xenonflash_res_system[] = "System Area";
 static const char xenonflash_res_memoryunit[] = "Memory Unit Area";
 
-static struct mtd_info *root_xenonflash_mtd;
+static struct mtd_info* root_xenonflash_mtd;
 
-static struct xenonflash_public *xenonflash;
+static struct xenonflash_public* xenonflash;
 
-static int xenonflash_read(struct mtd_info *mtd, loff_t from,
-			size_t len, size_t *retlen, u_char *buf)
-{
+static int xenonflash_read(struct mtd_info* mtd, loff_t from, size_t len, size_t* retlen, u_char* buf) {
 	struct xenonflash_private *mp = mtd->priv;
-
 	memcpy(buf, mp->uaddr + from, len);
 	*retlen = len;
 	return 0;
 }
 
-static int xenonflash_write(struct mtd_info *mtd, loff_t to,
-			size_t len, size_t *retlen, const u_char *buf)
-{
-	struct xenonflash_private *mp = mtd->priv;
-
+static int xenonflash_write(struct mtd_info* mtd, loff_t to, size_t len, size_t* retlen, const u_char* buf) {
+	struct xenonflash_private* mp = mtd->priv;
 	memcpy(mp->uaddr + to, buf, len);
 	*retlen = len;
 	return 0;
 }
 
-int xenonflash_get_metatype()
-{
-	return xenon_flash.meta_type;
-}
+int xenonflash_get_metatype() {	return xenon_flash.meta_type; }
 
-int xenonflash_get_pagesz
-{
-	return xenon_flash.page_sz;
-}
+int xenonflash_get_pagesz { return xenon_flash.page_sz; }
 
-int xenonflash_get_pagesz_phys
-{
-	return xenon_flash.page_sz_phys;
-}
+int xenonflash_get_pagesz_phys { return xenon_flash.page_sz_phys; }
 
-int xenonflash_get_metasz
-{
-	return xenon_flash.meta_sz;
-}
+int xenonflash_get_metasz {	return xenon_flash.meta_sz; }
 
-int xenonflash_get_pagecnt_in_block
-{
-	return xenon_flash.pages_in_block;
-}
+int xenonflash_get_pagecnt_in_block { return xenon_flash.pages_in_block; }
 
-int xenonflash_get_blocksz
-{
-	return xenon_flash.block_sz;
-}
+int xenonflash_get_blocksz { return xenon_flash.block_sz; }
 
-int xenonflash_get_blocksz_phys
-{
-	return xenon_flash.block_sz_phys;
-}
+int xenonflash_get_blocksz_phys { return xenon_flash.block_sz_phys; }
 
-int xenonflash_get_nandsz
-{
-	return xenon_flash.size_bytes;
-}
+int xenonflash_get_nandsz {	return xenon_flash.size_bytes; }
 
-int xenonflash_get_nandsz_phys
-{
-	return xenon_flash.size_bytes_phys;
-}
+int xenonflash_get_nandsz_phys { return xenon_flash.size_bytes_phys; }
 
-int xenonflash_get_total_pagecnt
-{
-	return xenon_flash.size_pages;
-}
+int xenonflash_get_total_pagecnt { return xenon_flash.size_pages; }
 
-int xenonflash_get_total_blockcnt
-{
-	return xenon_flash.size_blocks;
-}
+int xenonflash_get_total_blockcnt {	return xenon_flash.size_blocks; }
 
-static inline uint xenonflash_probe_one(ulong addr)
-{
+static inline uint xenonflash_probe_one(ulong addr) { /* TODO: Add return value? */ }
 
-}
+static int __init xenonflash_init_one(ulong addr) { /* TODO: Add return value? */ }
 
-static int __init xenonflash_init_one(ulong addr)
-{
-
-}
-
-static void __exit xenonflash_remove_one(void)
-{
-
-}
+static void __exit xenonflash_remove_one(void) { /* TODO: Add code body */ }
 
 
-static int __init xenonflash_init(void)
-{
+static int __init xenonflash_init(void) { /* TODO: Add return value? */ }
 
-}
-
-static void __exit xenonflash_cleanup(void)
-{
+static void __exit xenonflash_cleanup(void) {
 	while (root_xenonflash_mtd)
 		xenonflash_remove_one();
 }
-
 
 module_init(xenonflash_init);
 module_exit(xenonflash_cleanup);
