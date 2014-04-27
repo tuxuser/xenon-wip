@@ -501,62 +501,60 @@ int xenon_nandfs_ExtractFsEntry(void)
 	for(i=0; i<256; i++)
 	{
 		dumpdata.FsEnt[i] = (FS_ENT*)&dumpdata.FSRootFileBuf[i*sizeof(FS_ENT)];
-		if(dumpdata.FsEnt[i]->FileName[0] != 0)
-		{
-			printk(KERN_INFO "file: %s ", dumpdata.FsEnt[i]->FileName);
-			for(k=0; k< (22-strlen(dumpdata.FsEnt[i]->FileName)); k++)
-			{
-				printk(KERN_INFO " ");
-			}
-			
-			fsBlock = __builtin_bswap16(dumpdata.FsEnt[i]->StartCluster);
-			fsFileSize = __builtin_bswap32(dumpdata.FsEnt[i]->ClusterSz);
-			
-			printk(KERN_INFO "start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, (unsigned int)__builtin_bswap32(dumpdata.FsEnt[i]->TypeTime));
+		if(dumpdata.FsEnt[i]->FileName[0] == 0)
+			continue;
 
-			// extract the file
-			if(dumpdata.FsEnt[i]->FileName[0] != 0x5) // file is erased but still in the record
-			{
-				realBlock = fsBlock;
-				if(nand.isBB)
-				{
-					realBlock = ((dumpdata.LBAMap[fsBlock]<<3)-fsStartBlock);
-				}
-				
-				while(fsFileSize > 0x4000)
-				{
-#ifdef DEBUG
-					printk(KERN_INFO "%04x:%04x, ", fsBlock, realBlock);
-#endif
-#ifdef WRITE_OUT
-					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, 0x4000);
-#endif
-					fsFileSize = fsFileSize-0x4000;
-					fsBlock = __builtin_bswap16(dumpdata.pFSRootBufShort[fsBlock]); // gets next block
-					realBlock = dumpdata.LBAMap[fsBlock];
-					if(nand.isBB)
-					{
-						realBlock = (realBlock<<3); // to SmallBlock
-						realBlock -= fsStartBlock; // relative Adress
-						realBlock += (fsBlock % 8); // smallBlock inside bigBlock 
-					}
-				}
-				if((fsFileSize > 0)&&(fsBlock<0x1FFE))
-				{
-#ifdef DEBUG
-					printk(KERN_INFO "%04x:%04x, ", fsBlock, realBlock);
-#endif
-#ifdef WRITE_OUT
-					appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, fsFileSize);
-#endif
-				}
-				else
-					printk(KERN_INFO "** Couldn't write file tail! %04x:%04x, ", fsBlock, realBlock);
-			}
-			else
-				printk(KERN_INFO "   erased still has entry???");		
-			printk(KERN_INFO "\n\n");
+		printk(KERN_INFO "file: %s ", dumpdata.FsEnt[i]->FileName);
+		for(k=0; k< (22-strlen(dumpdata.FsEnt[i]->FileName)); k++)
+		{
+			printk(KERN_INFO " ");
 		}
+
+		fsBlock = __builtin_bswap16(dumpdata.FsEnt[i]->StartCluster);
+		fsFileSize = __builtin_bswap32(dumpdata.FsEnt[i]->ClusterSz);
+
+		printk(KERN_INFO "start: %04x size: %08x stamp: %08x\n", fsBlock, fsFileSize, (unsigned int)__builtin_bswap32(dumpdata.FsEnt[i]->TypeTime));
+
+		// extract the file
+		if(dumpdata.FsEnt[i]->FileName[0] == 0x5){ // file is erased but still in the record
+			printk(KERN_INFO "   erased still has entry???");
+			continue;
+		}
+			
+		realBlock = fsBlock;
+		if(nand.isBB)
+			realBlock = ((dumpdata.LBAMap[fsBlock]<<3)-fsStartBlock);
+
+		while(fsFileSize > 0x4000)
+		{
+#ifdef DEBUG
+			printk(KERN_INFO "%04x:%04x, ", fsBlock, realBlock);
+#endif
+#ifdef WRITE_OUT
+			appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, 0x4000);
+#endif
+			fsFileSize = fsFileSize-0x4000;
+			fsBlock = __builtin_bswap16(dumpdata.pFSRootBufShort[fsBlock]); // gets next block
+			realBlock = dumpdata.LBAMap[fsBlock];
+			if(nand.isBB)
+			{
+				realBlock = (realBlock<<3); // to SmallBlock
+				realBlock -= fsStartBlock; // relative Adress
+				realBlock += (fsBlock % 8); // smallBlock inside bigBlock
+			}
+		}
+		if((fsFileSize > 0)&&(fsBlock<0x1FFE))
+		{
+#ifdef DEBUG
+			printk(KERN_INFO "%04x:%04x, ", fsBlock, realBlock);
+#endif
+#ifdef WRITE_OUT
+			appendBlockToFile(dumpdata.FsEnt[i]->FileName, realBlock, fsFileSize);
+#endif
+		}
+		else
+			printk(KERN_INFO "** Couldn't write file tail! %04x:%04x, ", fsBlock, realBlock);
+	printk(KERN_INFO "\n\n");
 	} 
 	return 0;
 }
